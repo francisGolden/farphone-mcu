@@ -9,7 +9,7 @@ Speaker.begin()
 Speaker.setVolume(255)  # Maximum volume for the I2S/DAC speaker
 Lcd.clear(0x000000)
 
-# MAC address of the Feasycom FSC-BP108 beacon
+# MAC address of the Feasycom FSC-BP108 beacon (add the MAC address of your beacon)
 TARGET_MAC = bytes([0xDC, 0x0D, 0x30, 0x17, 0x45, 0x7D])
 _IRQ_SCAN_RESULT = 5
 
@@ -63,7 +63,7 @@ def draw_pingu_face():
     Lcd.setFont(M5.Lcd.FONTS.DejaVu12)
     Lcd.setTextColor(0xFFFFFF, 0x000000)
     Lcd.setCursor(12, 195)
-    Lcd.print("VIA QUEL TELEFONO!")
+    Lcd.print("PUT YOUR PHONE AWAY!")
 
 def trigger_pingu_alert():
     """Show Pingu, play the WAV, and gently close the audio channel to avoid a bump"""
@@ -99,7 +99,7 @@ def update_game_logic(avg_rssi):
         streak_cycles += 1
         focus_seconds += 5
         delta_label = "+10"
-        status = "DETOX"
+        status = "AWAY"
         color = 0x00FF00
         
         # Streak bonus: every continuous minute (12 cycles of 5s)
@@ -112,15 +112,15 @@ def update_game_logic(avg_rssi):
         in_danger_zone = False
         streak_cycles = 0
         delta_label = "+0"
-        status = "ATTENZIONE"
+        status = "ATTENTION"
         color = 0xFFFF00
         
     else:
         # Danger zone (phone in hand or too close)
         streak_cycles = 0
         score = max(0, score - 5)
-        delta_label = "-5 PENALITA"
-        status = "PERICOLO!"
+        delta_label = "-5 PENALTY"
+        status = "DANGER!"
         color = 0xFF0000
         
         # Trigger only on the first detection of entering the danger zone
@@ -162,7 +162,7 @@ def render_dashboard(status, delta_label, color, avg_rssi):
     mins = focus_seconds // 60
     secs = focus_seconds % 60
     Lcd.setCursor(10, 100)
-    Lcd.print(f"Tempo: {mins:02d}:{secs:02d}")
+    Lcd.print(f"Time: {mins:02d}:{secs:02d}")
 
 # Main loop
 while True:
