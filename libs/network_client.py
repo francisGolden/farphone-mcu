@@ -3,11 +3,6 @@ import time
 import config
 
 try:
-    import ntptime
-except ImportError:
-    ntptime = None
-
-try:
     import requests
 except ImportError:
     try:
@@ -42,13 +37,6 @@ def connect_wifi(log_cb=None, timeout_ms=7000):
             wlan.active(False)
             return False
         time.sleep_ms(150)
-        
-    # Sync the system RTC clock through NTP if available
-    if ntptime is not None:
-        try:
-            ntptime.settime()
-        except Exception:
-            pass  # Continue even in case of temporary NTP timeout
 
     if log_cb:
         log_cb(f"WIFI OK: {wlan.ifconfig()[0]}")
@@ -67,9 +55,6 @@ def disconnect_wifi(log_cb=None):
 def sync_session(score, focus_seconds, danger_count, last_rssi, battery=100, log_cb=None):
     if not connect_wifi(log_cb=log_cb):
         return False
-        
-    # Unix Timestamp in milliseconds
-    current_timestamp = int(time.time() * 1000)
     
     payload = {
         "score": score,
@@ -77,7 +62,6 @@ def sync_session(score, focus_seconds, danger_count, last_rssi, battery=100, log
         "dangerCount": danger_count,
         "lastRssi": last_rssi,
         "battery": battery,
-        "timestamp": current_timestamp
     }
     
     success = False
