@@ -3,6 +3,11 @@ import time
 import config
 
 try:
+    import ntptime
+except ImportError:
+    ntptime = None
+
+try:
     import requests
 except ImportError:
     try:
@@ -18,7 +23,6 @@ except ImportError:
 wlan = network.WLAN(network.STA_IF)
 
 def connect_wifi(log_cb=None, timeout_ms=7000):
-    """Activates Wi-Fi and connects with step-by-step progress logging."""
     if not wlan.active():
         wlan.active(True)
         
@@ -39,14 +43,18 @@ def connect_wifi(log_cb=None, timeout_ms=7000):
             return False
         time.sleep_ms(150)
         
-    ip_addr = wlan.ifconfig()[0]
+    # Sync the system RTC clock through NTP if available
+    if ntptime is not None:
+        try:
+            ntptime.settime()
+        except Exception:
+            pass  # Continue even in case of temporary NTP timeout
+
     if log_cb:
-        log_cb(f"WIFI OK: {ip_addr}")
-    print("[Wi-Fi] Connected:", ip_addr)
+        log_cb(f"WIFI OK: {wlan.ifconfig()[0]}")
     return True
 
 def disconnect_wifi(log_cb=None):
-    """Disconnects and disables the Wi-Fi radio."""
     if wlan.active():
         try:
             wlan.disconnect()
@@ -57,16 +65,19 @@ def disconnect_wifi(log_cb=None):
             log_cb("WIFI: RADIO OFF")
 
 def sync_session(score, focus_seconds, danger_count, last_rssi, battery=100, log_cb=None):
-    """Safely connects Wi-Fi, posts telemetry with timeout, and releases radio."""
     if not connect_wifi(log_cb=log_cb):
         return False
         
+    # Unix Timestamp in milliseconds
+    current_timestamp = int(time.time() * 1000)
+    
     payload = {
         "score": score,
         "focusSeconds": focus_seconds,
         "dangerCount": danger_count,
         "lastRssi": last_rssi,
-        "battery": battery
+        "battery": battery,
+        "timestamp": current_timestamp
     }
     
     success = False
@@ -76,10 +87,8 @@ def sync_session(score, focus_seconds, danger_count, last_rssi, battery=100, log
         
         if log_cb:
             log_cb("HTTP POST /sync...")
-        print("[Sync] Sending:", json_body)
-        
+            
         if requests is not None:
-            # timeout=5 avoid that the socket is blocked indefinitely
             response = requests.post(config.BACKEND_URL, data=json_body, headers=headers, timeout=5)
             status = response.status_code
             response.close()
@@ -91,16 +100,12 @@ def sync_session(score, focus_seconds, danger_count, last_rssi, battery=100, log
             else:
                 if log_cb:
                     log_cb(f"HTTP ERR ({status})")
-        else:
-            if log_cb:
-                log_cb("NO HTTP CLIENT")
-                
     except Exception as exc:
         if log_cb:
-            log_cb("NET TIMEOUT/ERR")
-        print("[Sync] Exception during HTTP post:", exc)
+            log_cb("HTTP NET ERROR")
+        print("[Sync] Error:", exc)
     finally:
         disconnect_wifi(log_cb=log_cb)
-        time.sleep_ms(150)  # Stabilize radio before returning to BLE
+        time.sleep_ms(150)
         
     return success
