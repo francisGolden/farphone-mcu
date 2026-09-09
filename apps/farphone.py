@@ -1,20 +1,23 @@
 import math
 import time
+import machine
+from machine import Pin
 import M5
 from M5 import BtnA, BtnB, Imu, Lcd, Power, Speaker
-from machine import Pin
 from libs.network_client import sync_session
+from libs.motion_detector import SmartMotionDetector
 
 # ==============================================================================
-# 1. HARDWARE & LED HEARTBEAT
+# 1. HARDWARE & POWER TUNING
 # ==============================================================================
 M5.begin()
-Speaker.begin()
-Speaker.setVolume(255)
+Lcd.setBrightness(80)
+Lcd.clear(0x000000)
 
+# LED integrato StickS3
 try:
     led = Pin(10, Pin.OUT)
-    led.value(1)  # 1 = SPENTO (active low su ESP32 M5Stick)
+    led.value(1)  # 1 = SPENTO (active-low)
 except Exception:
     led = None
 
@@ -24,12 +27,11 @@ def led_blink(duration_ms=15):
         time.sleep_ms(duration_ms)
         led.value(1)
 
-# ==============================================================================
-# 2. GESTIONE DISPLAY POWER
-# ==============================================================================
+# Impostazioni Display
 BRIGHT_ACTIVE = 80
-SCREEN_TIMEOUT_MS = 15000     # Aumentato a 15 secondi per dare tempo di leggere
-PEEK_DURATION_MS = 6000       # 6 secondi quando premi BtnB
+BRIGHT_OFF = 0
+SCREEN_TIMEOUT_MS = 10000     # 10 secondi prima dello spegnimento
+PEEK_DURATION_MS = 5000       # 5 secondi con BtnA o BtnB
 CALIBRATION_SETTLE_MS = 600
 
 is_display_on = True
@@ -38,91 +40,43 @@ peek_until_ms = 0
 def display_on():
     global is_display_on
     if not is_display_on:
-        try:
-            Lcd.wakeup()
-        except AttributeError:
-            pass
         Lcd.setBrightness(BRIGHT_ACTIVE)
         is_display_on = True
 
 def display_off():
     global is_display_on
     if is_display_on:
-        Lcd.setBrightness(0)
-        try:
-            Lcd.sleep()
-        except AttributeError:
-            pass
+        Lcd.setBrightness(BRIGHT_OFF)
         is_display_on = False
 
-display_on()
+# Istanza globale del rilevatore dal modulo esterno
+detector = SmartMotionDetector(
+    alpha=0.85,
+    energy_threshold=0.22,
+    sustain_ms=300,
+    tilt_threshold_rad=0.22
+)
 
 # ==============================================================================
-# 3. FILTRO CINEMATICO INTELLIGENTE
-# ==============================================================================
-class SmartMotionDetector:
-    def __init__(self, alpha=0.85, energy_threshold=0.22, sustain_ms=300, tilt_threshold_rad=0.22):
-        self.alpha = alpha
-        self.energy_threshold = energy_threshold
-        self.sustain_ms = sustain_ms
-        self.tilt_threshold = tilt_threshold_rad
-        self.gravity = [0.0, 0.0, 1.0]
-        self.ref_gravity = [0.0, 0.0, 1.0]
-        self.motion_start_ms = None
-
-    def reset_reference(self, initial_accel):
-        ax, ay, az = initial_accel
-        norm = math.sqrt(ax * ax + ay * ay + az * az) or 1.0
-        self.gravity = [ax / norm, ay / norm, az / norm]
-        self.ref_gravity = list(self.gravity)
-        self.motion_start_ms = None
-
-    def update(self, raw_accel):
-        now = time.ticks_ms()
-        ax, ay, az = raw_accel
-
-        self.gravity[0] = self.alpha * self.gravity[0] + (1.0 - self.alpha) * ax
-        self.gravity[1] = self.alpha * self.gravity[1] + (1.0 - self.alpha) * ay
-        self.gravity[2] = self.alpha * self.gravity[2] + (1.0 - self.alpha) * az
-
-        lx = ax - self.gravity[0]
-        ly = ay - self.gravity[1]
-        lz = az - self.gravity[2]
-        dyn_energy = math.sqrt(lx**2 + ly**2 + lz**2)
-
-        g_norm = math.sqrt(self.gravity[0]**2 + self.gravity[1]**2 + self.gravity[2]**2) or 1.0
-        dot = (self.gravity[0] * self.ref_gravity[0] +
-               self.gravity[1] * self.ref_gravity[1] +
-               self.gravity[2] * self.ref_gravity[2]) / g_norm
-        dot = max(-1.0, min(1.0, dot))
-        tilt = math.acos(dot)
-
-        if tilt > self.tilt_threshold:
-            return True
-
-        if dyn_energy > self.energy_threshold:
-            if self.motion_start_ms is None:
-                self.motion_start_ms = now
-            elif time.ticks_diff(now, self.motion_start_ms) >= self.sustain_ms:
-                return True
-        else:
-            self.motion_start_ms = None
-
-        return False
-
-detector = SmartMotionDetector()
-
-# ==============================================================================
-# 4. STATO E GRAFICA
+# 2. STATO, MODALITÀ & GAMIFICATION
 # ==============================================================================
 STATE_IDLE = "IDLE"
 STATE_FOCUS = "FOCUS"
 STATE_INTERRUPTED = "INTERRUPTED"
 
+MODES = [
+    {"label": "FREE", "target_sec": 0, "bonus": 0},
+    {"label": "1 MIN", "target_sec": 60, "bonus": 100},
+    {"label": "30 MIN", "target_sec": 30 * 60, "bonus": 1000},
+    {"label": "60 MIN", "target_sec": 60 * 60, "bonus": 2500}
+]
+selected_mode_idx = 0
+
 current_state = STATE_IDLE
 session_start_ms = 0
 focus_seconds = 0
 score = 0
+
 last_ui_tick = time.ticks_ms()
 last_heartbeat_ms = time.ticks_ms()
 last_activity_ms = time.ticks_ms()
@@ -141,15 +95,18 @@ def read_accel():
     except Exception:
         return 0.0, 0.0, 0.0
 
+# ==============================================================================
+# 3. GRAFICA & AUDIO
+# ==============================================================================
 def draw_pingu_face():
     Lcd.clear(0x000000)
-    Lcd.fillCircle(67, 80, 42, 0x111111)
-    Lcd.fillCircle(54, 66, 10, 0xFFFFFF)
-    Lcd.fillCircle(80, 66, 10, 0xFFFFFF)
-    Lcd.fillCircle(56, 66, 4, 0x000000)
-    Lcd.fillCircle(78, 66, 4, 0x000000)
-    Lcd.fillCircle(67, 92, 14, 0xFFA500)
-    Lcd.fillCircle(67, 92, 8, 0x880000)
+    Lcd.fillCircle(67, 80, 42, 0x111111)   # Testa
+    Lcd.fillCircle(54, 66, 10, 0xFFFFFF)   # Occhio SX
+    Lcd.fillCircle(80, 66, 10, 0xFFFFFF)   # Occhio DX
+    Lcd.fillCircle(56, 66, 4, 0x000000)    # Pupilla SX
+    Lcd.fillCircle(78, 66, 4, 0x000000)    # Pupilla DX
+    Lcd.fillCircle(67, 92, 14, 0xFFA500)   # Becco
+    Lcd.fillCircle(67, 92, 8, 0x880000)    # Bocca aperta
 
     Lcd.setFont(M5.Lcd.FONTS.DejaVu18)
     Lcd.setTextColor(0xFF0000, 0x000000)
@@ -160,19 +117,20 @@ def draw_pingu_face():
     Lcd.setTextColor(0xFFFFFF, 0x000000)
     Lcd.setCursor(20, 180)
     Lcd.print("PHONE MOVED!")
-    Lcd.setCursor(26, 202)
-    Lcd.print("Session Ended")
+    Lcd.setCursor(18, 202)
+    Lcd.print("Points Lost: 0")
 
 def trigger_pingu_alert():
     display_on()
     draw_pingu_face()
     try:
+        Speaker.begin()
         Speaker.setVolume(240)
         Speaker.playWavFile("res/audio/pingu.wav")
         while Speaker.isPlaying():
             time.sleep_ms(20)
-        Speaker.setVolume(0)
         Speaker.stop()
+        Speaker.end()
     except Exception as e:
         print("[Audio] Playback error:", e)
     time.sleep_ms(1500)
@@ -190,7 +148,6 @@ def render_sync_console(step_text):
     Lcd.print(step_text)
 
 def render_ui():
-    """Ridisegna completamente la dashboard."""
     if not is_display_on:
         return
 
@@ -202,50 +159,69 @@ def render_ui():
     Lcd.setCursor(95, 8)
     Lcd.print(f"{bat}%")
 
+    mode = MODES[selected_mode_idx]
+
     if current_state == STATE_IDLE:
         Lcd.setFont(M5.Lcd.FONTS.DejaVu18)
         Lcd.setTextColor(0x00AAFF, 0x000000)
-        Lcd.setCursor(10, 32)
+        Lcd.setCursor(8, 30)
         Lcd.print("STANDBY")
 
         Lcd.setFont(M5.Lcd.FONTS.DejaVu12)
+        Lcd.setTextColor(0xFFFF00, 0x000000)
+        Lcd.setCursor(8, 62)
+        Lcd.print(f"Mode: > {mode['label']} <")
+
         Lcd.setTextColor(0xAAAAAA, 0x000000)
-        Lcd.setCursor(10, 75)
-        Lcd.print("1. Place on phone")
-        Lcd.setCursor(10, 95)
-        Lcd.print("2. Press [BTN A]")
+        Lcd.setCursor(8, 95)
+        Lcd.print("[BTN B] Mode")
+        Lcd.setCursor(8, 115)
+        Lcd.print("[BTN A] Start")
 
         Lcd.setTextColor(0xFFFFFF, 0x000000)
-        Lcd.setCursor(10, 145)
+        Lcd.setCursor(8, 160)
         Lcd.print(f"Last: {focus_seconds}s")
-        Lcd.setCursor(10, 168)
+        Lcd.setCursor(8, 180)
         Lcd.print(f"Score: {score}")
 
     elif current_state == STATE_FOCUS:
-        mins = focus_seconds // 60
-        secs = focus_seconds % 60
+        target_sec = mode["target_sec"]
+        
+        if target_sec > 0:
+            remaining = max(0, target_sec - focus_seconds)
+            mins = remaining // 60
+            secs = remaining % 60
+            title_text = "REMAINING"
+        else:
+            mins = focus_seconds // 60
+            secs = focus_seconds % 60
+            title_text = "FOCUS"
 
         Lcd.setFont(M5.Lcd.FONTS.DejaVu18)
         Lcd.setTextColor(0x00FF00, 0x000000)
-        Lcd.setCursor(10, 32)
-        Lcd.print("FOCUS")
+        Lcd.setCursor(8, 30)
+        Lcd.print(title_text)
 
         Lcd.setFont(M5.Lcd.FONTS.DejaVu24)
         Lcd.setTextColor(0xFFFFFF, 0x000000)
-        Lcd.setCursor(10, 80)
+        Lcd.setCursor(8, 75)
         Lcd.print(f"{mins:02d}:{secs:02d}")
 
         Lcd.setFont(M5.Lcd.FONTS.DejaVu12)
         Lcd.setTextColor(0x00FF88, 0x000000)
-        Lcd.setCursor(10, 125)
+        Lcd.setCursor(8, 125)
         Lcd.print(f"Score: {score}")
+        if mode["bonus"] > 0:
+            Lcd.setTextColor(0xFFFF00, 0x000000)
+            Lcd.setCursor(8, 145)
+            Lcd.print(f"Goal: +{mode['bonus']}pt")
 
         Lcd.setTextColor(0x777777, 0x000000)
-        Lcd.setCursor(10, 180)
-        Lcd.print("LEAVE PHONE")
+        Lcd.setCursor(8, 195)
+        Lcd.print("DON'T TOUCH")
 
 # ==============================================================================
-# 5. AZIONI SESSIONE
+# 4. GESTIONE TRANSIZIONI SESSIONE
 # ==============================================================================
 def start_session():
     global current_state, session_start_ms, focus_seconds, score, last_ui_tick, last_activity_ms
@@ -259,13 +235,18 @@ def start_session():
     now = time.ticks_ms()
     session_start_ms = now
     last_ui_tick = now
-    last_activity_ms = now  # Reset del timeout di spegnimento display
+    last_activity_ms = now
     current_state = STATE_FOCUS
     render_ui()
 
 def interrupt_session():
-    global current_state, last_activity_ms
+    global current_state, last_activity_ms, score
     current_state = STATE_INTERRUPTED
+    
+    target_sec = MODES[selected_mode_idx]["target_sec"]
+    if target_sec > 0 and focus_seconds < target_sec:
+        score = 0  # Sfida fallita: punti azzerati
+        
     trigger_pingu_alert()
     
     try:
@@ -285,8 +266,44 @@ def interrupt_session():
     display_on()
     render_ui()
 
+def complete_session():
+    global current_state, last_activity_ms, score
+    current_state = STATE_IDLE
+    display_on()
+    
+    score += MODES[selected_mode_idx]["bonus"]
+
+    Lcd.clear(0x000000)
+    Lcd.setFont(M5.Lcd.FONTS.DejaVu18)
+    Lcd.setTextColor(0x00FF00, 0x000000)
+    Lcd.setCursor(10, 45)
+    Lcd.print("GOAL REACHED!")
+    
+    Lcd.setFont(M5.Lcd.FONTS.DejaVu12)
+    Lcd.setTextColor(0xFFFFFF, 0x000000)
+    Lcd.setCursor(10, 85)
+    Lcd.print(f"Total: +{score} pts")
+    Lcd.setCursor(10, 110)
+    Lcd.print("Great work!")
+    time.sleep_ms(2500)
+
+    try:
+        sync_session(
+            score=score,
+            focus_seconds=focus_seconds,
+            danger_count=0,
+            last_rssi=0,
+            battery=get_battery_percentage(),
+            log_cb=render_sync_console
+        )
+    except Exception as e:
+        print("[Sync] Errore:", e)
+
+    last_activity_ms = time.ticks_ms()
+    render_ui()
+
 # ==============================================================================
-# 6. CICLO PRINCIPALE
+# 5. MAIN LOOP
 # ==============================================================================
 render_ui()
 
@@ -295,57 +312,62 @@ while True:
     now = time.ticks_ms()
     acc_sample = read_accel()
 
-    # --- TASTO A (Start / Stop Manuale) ---
+    # --- TASTO A (Start in Standby / Peek in Focus) ---
     if BtnA.wasPressed():
         last_activity_ms = now
         if current_state in (STATE_IDLE, STATE_INTERRUPTED):
             start_session()
         elif current_state == STATE_FOCUS:
-            current_state = STATE_IDLE
-            display_on()
-            try:
-                sync_session(
-                    score=score,
-                    focus_seconds=focus_seconds,
-                    danger_count=0,
-                    last_rssi=0,
-                    battery=get_battery_percentage(),
-                    log_cb=render_sync_console
-                )
-            except Exception as e:
-                print("[Sync] Errore:", e)
-            render_ui()
+            # Durante il focus, sveglia temporaneamente lo schermo senza fermare la sessione
+            peek_until_ms = time.ticks_add(now, PEEK_DURATION_MS)
+            if not is_display_on:
+                display_on()
+                render_ui()
 
-    # --- TASTO B (Peek: riaccende lo schermo) ---
+    # --- TASTO B (Cambio modalità in Standby / Peek in Focus) ---
     if BtnB.wasPressed():
         last_activity_ms = now
-        peek_until_ms = time.ticks_add(now, PEEK_DURATION_MS)
-        if not is_display_on:
+        if current_state == STATE_IDLE:
+            selected_mode_idx = (selected_mode_idx + 1) % len(MODES)
             display_on()
             render_ui()
+        elif current_state == STATE_FOCUS:
+            peek_until_ms = time.ticks_add(now, PEEK_DURATION_MS)
+            if not is_display_on:
+                display_on()
+                render_ui()
 
     # --- STATO FOCUS ---
     if current_state == STATE_FOCUS:
+        # Solo lo spostamento fisico interrompe la sessione
         if detector.update(acc_sample):
             interrupt_session()
             continue
 
-        # Lampeggio discreto ogni 4s
+        target_sec = MODES[selected_mode_idx]["target_sec"]
+
+        # Heartbeat ogni 4s
         if time.ticks_diff(now, last_heartbeat_ms) >= 4000:
             last_heartbeat_ms = now
             led_blink(15)
 
-        # Aggiornamento UI ogni 1 secondo
+        # Tick 1s
         if time.ticks_diff(now, last_ui_tick) >= 1000:
             last_ui_tick = now
             focus_seconds += 1
             score += 2
-            if focus_seconds % 60 == 0:
+            
+            if target_sec == 0 and focus_seconds % 60 == 0:
                 score += 50
+
+            if target_sec > 0 and focus_seconds >= target_sec:
+                complete_session()
+                continue
+
             if is_display_on:
                 render_ui()
 
-        # Spegnimento se inattivo e non in sbirciata
+        # Spegnimento display se timeout scaduto e non in sbirciata
         if is_display_on:
             is_peeking = time.ticks_diff(peek_until_ms, now) > 0
             if not is_peeking and time.ticks_diff(now, last_activity_ms) > SCREEN_TIMEOUT_MS:
@@ -353,20 +375,16 @@ while True:
 
     # --- STATO IDLE ---
     elif current_state == STATE_IDLE:
-        # Controllo movimento per risveglio dallo standby
         dx = acc_sample[0] - detector.gravity[0]
         dy = acc_sample[1] - detector.gravity[1]
         dz = acc_sample[2] - detector.gravity[2]
         
-        # Se si muove in IDLE: aggiorna solo il timer di attività per non farlo spegnere
         if math.sqrt(dx**2 + dy**2 + dz**2) > 0.35:
             last_activity_ms = now
-            # Ridisegna SOLO se lo schermo era spento, evitando il flickering a 25Hz
             if not is_display_on:
                 display_on()
                 render_ui()
 
-        # Spegnimento display in standby
         if is_display_on and time.ticks_diff(now, last_activity_ms) > SCREEN_TIMEOUT_MS:
             display_off()
 
