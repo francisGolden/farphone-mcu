@@ -8,7 +8,7 @@ from libs.network_client import get_user_profile, update_user_points
 from libs.motion_detector import SmartMotionDetector
 
 # ==============================================================================
-# 1. HARDWARE & POWER TUNING
+# 1. HARDWARE & SETUP
 # ==============================================================================
 M5.begin()
 Lcd.setBrightness(80)
@@ -16,7 +16,7 @@ Lcd.clear(0x000000)
 
 try:
     led = Pin(10, Pin.OUT)
-    led.value(1)  # 1 = SPENTO (active-low)
+    led.value(1)  # 1 = spento
 except Exception:
     led = None
 
@@ -28,8 +28,8 @@ def led_blink(duration_ms=15):
 
 BRIGHT_ACTIVE = 80
 BRIGHT_OFF = 0
-SCREEN_TIMEOUT_MS = 10000     # 10 secondi prima dello spegnimento
-PEEK_DURATION_MS = 5000       # 5 secondi con BtnA o BtnB
+SCREEN_TIMEOUT_MS = 10000
+PEEK_DURATION_MS = 5000
 CALIBRATION_SETTLE_MS = 600
 
 is_display_on = True
@@ -55,23 +55,137 @@ detector = SmartMotionDetector(
 )
 
 # ==============================================================================
-# 2. STATO, CONFIGURAZIONE & GAMIFICATION
+# 2. PIXEL ART SPRITES (Stardew Valley Style)
+# ==============================================================================
+# Palette 16-bit RGB565 tipica da fattoria
+C_SOIL_DARK = 0x4A2500
+C_SOIL_LIGHT = 0x733804
+C_STEM_GREEN = 0x248810
+C_LEAF_BRIGHT = 0x5CD632
+C_WITHER_BROWN = 0x633919
+C_WITHER_LEAF = 0x8C5224
+
+def draw_tilled_soil(cx, cy):
+    # Base di terra arata zollosa
+    Lcd.fillRect(cx - 24, cy + 18, 48, 10, C_SOIL_DARK)
+    Lcd.fillRect(cx - 20, cy + 16, 40, 3, C_SOIL_LIGHT)
+    Lcd.fillRect(cx - 16, cy + 22, 10, 2, C_SOIL_LIGHT)
+    Lcd.fillRect(cx + 8, cy + 20, 12, 2, C_SOIL_LIGHT)
+
+def draw_sprout(cx, cy):
+    # Fase 1: Germoglio comune a tutte le colture
+    draw_tilled_soil(cx, cy)
+    Lcd.fillRect(cx - 1, cy + 8, 3, 10, C_STEM_GREEN)
+    Lcd.fillRect(cx - 6, cy + 4, 5, 4, C_LEAF_BRIGHT)
+    Lcd.fillRect(cx + 2, cy + 2, 6, 4, C_LEAF_BRIGHT)
+
+def draw_growing_plant(cx, cy):
+    # Fase 2: Fusto vigoroso con 4 foglie
+    draw_tilled_soil(cx, cy)
+    Lcd.fillRect(cx - 2, cy - 2, 4, 20, C_STEM_GREEN)
+    # Foglie inferiori
+    Lcd.fillRect(cx - 10, cy + 6, 8, 4, C_LEAF_BRIGHT)
+    Lcd.fillRect(cx + 2, cy + 4, 9, 4, C_LEAF_BRIGHT)
+    # Foglie superiori
+    Lcd.fillRect(cx - 8, cy - 2, 6, 4, C_LEAF_BRIGHT)
+    Lcd.fillRect(cx + 2, cy - 4, 7, 4, C_LEAF_BRIGHT)
+
+def draw_parsnip_mature(cx, cy):
+    # Fase 3: Pastinaca (radice dorata/crema + ciuffo)
+    draw_tilled_soil(cx, cy)
+    Lcd.fillRect(cx - 1, cy + 4, 3, 14, C_STEM_GREEN)
+    Lcd.fillRect(cx - 7, cy + 2, 6, 3, C_LEAF_BRIGHT)
+    Lcd.fillRect(cx + 2, cy + 1, 6, 3, C_LEAF_BRIGHT)
+    # Radice dorata Stardew
+    Lcd.fillRect(cx - 6, cy - 12, 12, 14, 0xFFE082)
+    Lcd.fillRect(cx - 4, cy + 2, 8, 4, 0xFFCA28)
+    Lcd.fillRect(cx - 2, cy + 6, 4, 3, 0xD4A017)
+
+def draw_blueberry_mature(cx, cy):
+    # Fase 3: Cespuglio di mirtilli carichi
+    draw_tilled_soil(cx, cy)
+    Lcd.fillRect(cx - 14, cy - 8, 28, 26, C_STEM_GREEN)
+    Lcd.fillRect(cx - 12, cy - 10, 24, 4, C_LEAF_BRIGHT)
+    # Bacche blu brillante
+    Lcd.fillRect(cx - 9, cy - 4, 6, 6, 0x2266FF)
+    Lcd.fillRect(cx + 3, cy - 6, 6, 6, 0x1144DD)
+    Lcd.fillRect(cx - 4, cy + 4, 7, 7, 0x4488FF)
+    Lcd.fillRect(cx + 4, cy + 6, 6, 6, 0x2266FF)
+
+def draw_ancient_fruit_mature(cx, cy):
+    # Fase 3: Frutto Antico azzurro-cianico brillante
+    draw_tilled_soil(cx, cy)
+    Lcd.fillRect(cx - 2, cy - 4, 5, 22, 0x1A591E)
+    # Viticci dorati
+    Lcd.fillRect(cx - 10, cy + 8, 8, 3, 0xFFA000)
+    Lcd.fillRect(cx + 3, cy + 5, 8, 3, 0xFFA000)
+    # Bulbo mistico
+    Lcd.fillRect(cx - 8, cy - 16, 17, 18, 0x05E5D0)
+    Lcd.fillRect(cx - 6, cy - 18, 13, 3, 0x76FFEA)
+    Lcd.fillRect(cx - 3, cy - 10, 7, 8, 0xFFFFFF)
+
+def draw_withered_crop(cx, cy):
+    # Coltura appassita (Breach of Contract)
+    draw_tilled_soil(cx, cy)
+    Lcd.fillRect(cx - 2, cy + 2, 4, 16, C_WITHER_BROWN)
+    # Foglie piegate verso il suolo
+    Lcd.fillRect(cx - 10, cy + 10, 9, 4, C_WITHER_LEAF)
+    Lcd.fillRect(cx + 1, cy + 12, 10, 4, C_WITHER_LEAF)
+    # Fusto cadente
+    Lcd.fillRect(cx - 6, cy - 2, 8, 5, C_WITHER_BROWN)
+
+def draw_crop_stage(crop_key, progress_ratio, cx=67, cy=72):
+    """Disegna lo sprite corretto in base alla % del contratto."""
+    if progress_ratio < 0.25:
+        draw_sprout(cx, cy)
+    elif progress_ratio < 0.80:
+        draw_growing_plant(cx, cy)
+    else:
+        if crop_key == "PARSNIP":
+            draw_parsnip_mature(cx, cy)
+        elif crop_key == "BLUEBERRY":
+            draw_blueberry_mature(cx, cy)
+        elif crop_key == "ANCIENT_FRUIT":
+            draw_ancient_fruit_mature(cx, cy)
+        else:
+            draw_growing_plant(cx, cy)
+
+# ==============================================================================
+# 3. MODELLO DATI CONTRATTI & STATO
 # ==============================================================================
 USER_ID = "1d27f428-ac94-4f9e-82d0-f2a62e6c2bea"
 user_name = "Connecting..."
 total_points = 0
 
 STATE_IDLE = "IDLE"
+STATE_REVIEW = "REVIEW"
 STATE_FOCUS = "FOCUS"
 STATE_INTERRUPTED = "INTERRUPTED"
 
-MODES = [
-    {"label": "FREE",   "target_sec": 0,       "bonus": 0},
-    {"label": "1 MIN",  "target_sec": 60,      "bonus": 100},
-    {"label": "30 MIN", "target_sec": 30 * 60, "bonus": 1000},
-    {"label": "60 MIN", "target_sec": 60 * 60, "bonus": 2500}
+CROPS = [
+    {
+        "id": "PARSNIP",
+        "name": "Parsnip",
+        "target_sec": 60,
+        "bonus": 50,
+        "color": 0xFFE082
+    },
+    {
+        "id": "BLUEBERRY",
+        "name": "Blueberry",
+        "target_sec": 30 * 60,
+        "bonus": 500,
+        "color": 0x4488FF
+    },
+    {
+        "id": "ANCIENT_FRUIT",
+        "name": "Ancient Fruit",
+        "target_sec": 60 * 60,
+        "bonus": 1500,
+        "color": 0x05E5D0
+    }
 ]
-selected_mode_idx = 0
+selected_crop_idx = 0
 
 current_state = STATE_IDLE
 session_start_ms = 0
@@ -97,33 +211,28 @@ def read_accel():
         return 0.0, 0.0, 0.0
 
 # ==============================================================================
-# 3. GRAFICA & AUDIO
+# 4. GRAFICA & UI
 # ==============================================================================
-def draw_pingu_face():
+def trigger_breach_alert():
+    display_on()
     Lcd.clear(0x000000)
-    Lcd.fillCircle(67, 80, 42, 0x111111)
-    Lcd.fillCircle(54, 66, 10, 0xFFFFFF)
-    Lcd.fillCircle(80, 66, 10, 0xFFFFFF)
-    Lcd.fillCircle(56, 66, 4, 0x000000)
-    Lcd.fillCircle(78, 66, 4, 0x000000)
-    Lcd.fillCircle(67, 92, 14, 0xFFA500)
-    Lcd.fillCircle(67, 92, 8, 0x880000)
-
+    
+    # Sprite coltura morta al centro
+    draw_withered_crop(67, 75)
+    
     Lcd.setFont(M5.Lcd.FONTS.DejaVu18)
-    Lcd.setTextColor(0xFF0000, 0x000000)
-    Lcd.setCursor(12, 145)
-    Lcd.print("NOOT NOOT!")
+    Lcd.setTextColor(0xFF2222, 0x000000)
+    Lcd.setCursor(8, 140)
+    Lcd.print("CROP WITHERED")
 
     Lcd.setFont(M5.Lcd.FONTS.DejaVu12)
-    Lcd.setTextColor(0xFFFFFF, 0x000000)
-    Lcd.setCursor(20, 180)
-    Lcd.print("PHONE MOVED!")
-    Lcd.setCursor(18, 202)
-    Lcd.print("Points Lost: 0")
+    Lcd.setTextColor(0xAAAAAA, 0x000000)
+    Lcd.setCursor(14, 172)
+    Lcd.print("Contract Breached!")
+    Lcd.setTextColor(0xFF6666, 0x000000)
+    Lcd.setCursor(20, 198)
+    Lcd.print("Seed Lost: 0 XP")
 
-def trigger_pingu_alert():
-    display_on()
-    draw_pingu_face()
     try:
         Speaker.begin()
         Speaker.setVolume(240)
@@ -134,7 +243,7 @@ def trigger_pingu_alert():
         Speaker.end()
     except Exception as e:
         print("[Audio] Playback error:", e)
-    time.sleep_ms(1500)
+    time.sleep_ms(2000)
 
 def render_sync_console(step_text):
     display_on()
@@ -148,8 +257,55 @@ def render_sync_console(step_text):
     Lcd.setCursor(10, 60)
     Lcd.print(step_text)
 
+def render_contract_review():
+    Lcd.clear(0x000000)
+    crop = CROPS[selected_crop_idx]
+
+    # Titolo stile pergamena Stardew
+    Lcd.setFont(M5.Lcd.FONTS.DejaVu12)
+    Lcd.setTextColor(0xFFA500, 0x000000)
+    Lcd.setCursor(10, 12)
+    Lcd.print("CROP CONTRACT")
+    Lcd.drawLine(8, 28, 127, 28, 0x553311)
+
+    # Dettagli del patto agricolo
+    Lcd.setTextColor(0x888888, 0x000000)
+    Lcd.setCursor(8, 38)
+    Lcd.print("Seed Type:")
+    Lcd.setTextColor(crop["color"], 0x000000)
+    Lcd.setCursor(8, 54)
+    Lcd.print(crop["name"])
+
+    Lcd.setTextColor(0x888888, 0x000000)
+    Lcd.setCursor(8, 76)
+    Lcd.print("Growth Time:")
+    Lcd.setTextColor(0xFFFFFF, 0x000000)
+    Lcd.setCursor(8, 92)
+    mins = crop["target_sec"] // 60
+    Lcd.print(f"{mins} Minutes" if mins > 0 else f"{crop['target_sec']}s")
+
+    Lcd.setTextColor(0x888888, 0x000000)
+    Lcd.setCursor(8, 114)
+    Lcd.print("Harvest Yield:")
+    Lcd.setTextColor(0x00FF88, 0x000000)
+    Lcd.setCursor(8, 130)
+    Lcd.print(f"+{crop['bonus']} XP + Crop")
+
+    # Bottoni firma
+    Lcd.drawLine(8, 154, 127, 154, 0x444444)
+    Lcd.setTextColor(0x00AAFF, 0x000000)
+    Lcd.setCursor(6, 170)
+    Lcd.print("[A] PLANT & LOCK")
+    Lcd.setTextColor(0x777777, 0x000000)
+    Lcd.setCursor(6, 198)
+    Lcd.print("[B] NEXT SEED")
+
 def render_ui():
     if not is_display_on:
+        return
+
+    if current_state == STATE_REVIEW:
+        render_contract_review()
         return
 
     Lcd.clear(0x000000)
@@ -160,77 +316,79 @@ def render_ui():
     Lcd.setCursor(95, 8)
     Lcd.print(f"{bat}%")
 
-    mode = MODES[selected_mode_idx]
+    crop = CROPS[selected_crop_idx]
 
+    # --- SCHERMATA IDLE (Fattoria in Standby) ---
     if current_state == STATE_IDLE:
         Lcd.setFont(M5.Lcd.FONTS.DejaVu18)
-        Lcd.setTextColor(0x00AAFF, 0x000000)
-        Lcd.setCursor(8, 25)
-        Lcd.print("STANDBY")
+        Lcd.setTextColor(0x00FF88, 0x000000)
+        Lcd.setCursor(8, 20)
+        Lcd.print("GREENHOUSE")
 
         Lcd.setFont(M5.Lcd.FONTS.DejaVu12)
-        Lcd.setTextColor(0x00FFCC, 0x000000)
-        Lcd.setCursor(8, 52)
-        Lcd.print(f"User: {user_name}")
-        Lcd.setCursor(8, 70)
-        Lcd.print(f"Total: {total_points} pt")
+        Lcd.setTextColor(0x00AAFF, 0x000000)
+        Lcd.setCursor(8, 48)
+        Lcd.print(f"Farm: {user_name}")
+        Lcd.setCursor(8, 66)
+        Lcd.print(f"Total: {total_points} XP")
 
-        Lcd.setTextColor(0xFFFF00, 0x000000)
-        Lcd.setCursor(8, 100)
-        Lcd.print(f"Mode: > {mode['label']} <")
+        # Selezione Seme Corrente
+        Lcd.setTextColor(0x888888, 0x000000)
+        Lcd.setCursor(8, 95)
+        Lcd.print("Ready to plant:")
+        Lcd.setTextColor(crop["color"], 0x000000)
+        Lcd.setCursor(8, 112)
+        Lcd.print(f"> {crop['name']} <")
 
         Lcd.setTextColor(0xAAAAAA, 0x000000)
-        Lcd.setCursor(8, 130)
-        Lcd.print("[BTN B] Mode")
-        Lcd.setCursor(8, 150)
-        Lcd.print("[BTN A] Start")
+        Lcd.setCursor(8, 142)
+        Lcd.print("[BTN B] Change")
+        Lcd.setCursor(8, 162)
+        Lcd.print("[BTN A] Contract")
 
-        Lcd.setTextColor(0xFFFFFF, 0x000000)
-        Lcd.setCursor(8, 185)
-        Lcd.print(f"Last: {focus_seconds}s | +{score}")
+        Lcd.setTextColor(0x666666, 0x000000)
+        Lcd.setCursor(8, 195)
+        Lcd.print(f"Last Yield: +{score}")
 
+    # --- SCHERMATA FOCUS (Contratto Attivo + Piantina Pixel Art) ---
     elif current_state == STATE_FOCUS:
-        target_sec = mode["target_sec"]
-        
-        if target_sec > 0:
-            remaining = max(0, target_sec - focus_seconds)
-            mins = remaining // 60
-            secs = remaining % 60
-            title_text = "REMAINING"
-        else:
-            mins = focus_seconds // 60
-            secs = focus_seconds % 60
-            title_text = "FOCUS"
+        target_sec = crop["target_sec"]
+        remaining = max(0, target_sec - focus_seconds)
+        mins = remaining // 60
+        secs = remaining % 60
+        progress_ratio = min(1.0, focus_seconds / target_sec)
 
+        # 1. Disegna lo sprite evolutivo in pixel art
+        draw_crop_stage(crop["id"], progress_ratio, cx=67, cy=55)
+
+        # 2. Timer Countdown in stile vintage
         Lcd.setFont(M5.Lcd.FONTS.DejaVu18)
-        Lcd.setTextColor(0x00FF00, 0x000000)
-        Lcd.setCursor(8, 30)
-        Lcd.print(title_text)
-
-        Lcd.setFont(M5.Lcd.FONTS.DejaVu24)
         Lcd.setTextColor(0xFFFFFF, 0x000000)
-        Lcd.setCursor(8, 75)
+        Lcd.setCursor(42, 100)
         Lcd.print(f"{mins:02d}:{secs:02d}")
 
+        # 3. Progress Bar Grafica (Pixelata)
+        bar_x, bar_y, bar_w, bar_h = 15, 130, 105, 10
+        Lcd.drawRect(bar_x, bar_y, bar_w, bar_h, 0x444444)
+        fill_w = int(bar_w * progress_ratio)
+        if fill_w > 0:
+            Lcd.fillRect(bar_x, bar_y, fill_w, bar_h, crop["color"])
+
+        # 4. Status
         Lcd.setFont(M5.Lcd.FONTS.DejaVu12)
         Lcd.setTextColor(0x00FF88, 0x000000)
-        Lcd.setCursor(8, 125)
-        Lcd.print(f"Score: {score}")
-        if mode["bonus"] > 0:
-            Lcd.setTextColor(0xFFFF00, 0x000000)
-            Lcd.setCursor(8, 145)
-            Lcd.print(f"Goal: +{mode['bonus']}pt")
+        Lcd.setCursor(18, 155)
+        Lcd.print(f"Growing {crop['name']}")
 
-        Lcd.setTextColor(0x777777, 0x000000)
-        Lcd.setCursor(8, 195)
-        Lcd.print("DON'T TOUCH")
+        Lcd.setTextColor(0x555555, 0x000000)
+        Lcd.setCursor(18, 195)
+        Lcd.print("PHONE LOCKED")
 
 # ==============================================================================
-# 4. GESTIONE TRANSIZIONI SESSIONE
+# 5. TRANSIZIONI & GESTIONE SESSIONE
 # ==============================================================================
 def start_session():
     global current_state, session_start_ms, focus_seconds, score, last_ui_tick, last_activity_ms
-    
     display_on()
     time.sleep_ms(CALIBRATION_SETTLE_MS)
     detector.reset_reference(read_accel())
@@ -247,19 +405,9 @@ def start_session():
 def interrupt_session():
     global current_state, last_activity_ms, score, total_points
     current_state = STATE_INTERRUPTED
-    
-    target_sec = MODES[selected_mode_idx]["target_sec"]
-    if target_sec > 0 and focus_seconds < target_sec:
-        score = 0
-        
-    trigger_pingu_alert()
-    
-    if score > 0:
-        try:
-            if update_user_points(USER_ID, score, log_cb=render_sync_console):
-                total_points += score
-        except Exception as e:
-            print("[Sync] Update points error:", e)
+    score = 0  # Infranto il patto = 0 XP e raccolto perso
+
+    trigger_breach_alert()
 
     current_state = STATE_IDLE
     last_activity_ms = time.ticks_ms()
@@ -270,46 +418,52 @@ def complete_session():
     global current_state, last_activity_ms, score, total_points
     current_state = STATE_IDLE
     display_on()
-    
-    score += MODES[selected_mode_idx]["bonus"]
 
+    crop = CROPS[selected_crop_idx]
+    score = crop["bonus"]
+
+    # Schermata di Raccolto Riuscito
     Lcd.clear(0x000000)
-    Lcd.setFont(M5.Lcd.FONTS.DejaVu18)
-    Lcd.setTextColor(0x00FF00, 0x000000)
-    Lcd.setCursor(10, 45)
-    Lcd.print("GOAL REACHED!")
+    draw_crop_stage(crop["id"], 1.0, cx=67, cy=60)
     
+    Lcd.setFont(M5.Lcd.FONTS.DejaVu18)
+    Lcd.setTextColor(0x00FF88, 0x000000)
+    Lcd.setCursor(12, 120)
+    Lcd.print("HARVESTED!")
+
     Lcd.setFont(M5.Lcd.FONTS.DejaVu12)
     Lcd.setTextColor(0xFFFFFF, 0x000000)
-    Lcd.setCursor(10, 85)
-    Lcd.print(f"Total: +{score} pts")
-    Lcd.setCursor(10, 110)
-    Lcd.print("Great work!")
+    Lcd.setCursor(12, 150)
+    Lcd.print(f"{crop['name']} Added!")
+    Lcd.setTextColor(0xFFFF00, 0x000000)
+    Lcd.setCursor(12, 172)
+    Lcd.print(f"+{score} XP")
     time.sleep_ms(2500)
 
+    # Invia sia i punti sia il crop.id al backend
     try:
-        if update_user_points(USER_ID, score, log_cb=render_sync_console):
+        if update_user_points(USER_ID, score, plant_type=crop["id"], log_cb=render_sync_console):
             total_points += score
     except Exception as e:
-        print("[Sync] Update points error:", e)
+        print("[Sync] Harvest update error:", e)
 
     last_activity_ms = time.ticks_ms()
     render_ui()
 
 # ==============================================================================
-# 5. INITIAL BOOTSTRAP & PROFILAZIONE
+# 6. BOOTSTRAP INIZIALE
 # ==============================================================================
 render_ui()
 
 try:
     profile = get_user_profile(USER_ID, log_cb=render_sync_console)
     if profile:
-        user_name = profile.get("username", "User")
+        user_name = profile.get("username", "Farmer")
         total_points = profile.get("totalPoints", 0)
     else:
         user_name = "Offline"
 except Exception as err:
-    print("[Boot] Fetch error:", err)
+    print("[Boot] Sync profilazione fallita:", err)
     user_name = "Offline"
 
 last_activity_ms = time.ticks_ms()
@@ -317,17 +471,21 @@ display_on()
 render_ui()
 
 # ==============================================================================
-# 6. MAIN LOOP
+# 7. MAIN LOOP
 # ==============================================================================
 while True:
     M5.update()
     now = time.ticks_ms()
     acc_sample = read_accel()
 
-    # --- TASTO A (Start in Standby / Peek in Focus) ---
+    # --- TASTO A (Firma/Inizia o Peek) ---
     if BtnA.wasPressed():
         last_activity_ms = now
         if current_state in (STATE_IDLE, STATE_INTERRUPTED):
+            current_state = STATE_REVIEW
+            display_on()
+            render_ui()
+        elif current_state == STATE_REVIEW:
             start_session()
         elif current_state == STATE_FOCUS:
             peek_until_ms = time.ticks_add(now, PEEK_DURATION_MS)
@@ -335,11 +493,15 @@ while True:
                 display_on()
                 render_ui()
 
-    # --- TASTO B (Cambio modalità in Standby / Peek in Focus) ---
+    # --- TASTO B (Scelta seme / Annulla contratto / Peek) ---
     if BtnB.wasPressed():
         last_activity_ms = now
         if current_state == STATE_IDLE:
-            selected_mode_idx = (selected_mode_idx + 1) % len(MODES)
+            selected_crop_idx = (selected_crop_idx + 1) % len(CROPS)
+            display_on()
+            render_ui()
+        elif current_state == STATE_REVIEW:
+            current_state = STATE_IDLE
             display_on()
             render_ui()
         elif current_state == STATE_FOCUS:
@@ -348,15 +510,16 @@ while True:
                 display_on()
                 render_ui()
 
-    # --- STATO FOCUS ---
+    # --- STATO FOCUS (COLTIVAZIONE IN CORSO) ---
     if current_state == STATE_FOCUS:
+        # Rilevamento violazione fisica (spostamento smartphone)
         if detector.update(acc_sample):
             interrupt_session()
             continue
 
-        target_sec = MODES[selected_mode_idx]["target_sec"]
+        target_sec = CROPS[selected_crop_idx]["target_sec"]
 
-        # LED Heartbeat ogni 4s
+        # LED Heartbeat verde ogni 4s
         if time.ticks_diff(now, last_heartbeat_ms) >= 4000:
             last_heartbeat_ms = now
             led_blink(15)
@@ -365,30 +528,26 @@ while True:
         if time.ticks_diff(now, last_ui_tick) >= 1000:
             last_ui_tick = now
             focus_seconds += 1
-            score += 2
-            
-            if target_sec == 0 and focus_seconds % 60 == 0:
-                score += 50
 
-            if target_sec > 0 and focus_seconds >= target_sec:
+            if focus_seconds >= target_sec:
                 complete_session()
                 continue
 
             if is_display_on:
                 render_ui()
 
-        # Timeout spegnimento display
+        # Risparmio energetico display
         if is_display_on:
             is_peeking = time.ticks_diff(peek_until_ms, now) > 0
             if not is_peeking and time.ticks_diff(now, last_activity_ms) > SCREEN_TIMEOUT_MS:
                 display_off()
 
-    # --- STATO IDLE ---
-    elif current_state == STATE_IDLE:
+    # --- STATO IDLE & REVIEW ---
+    elif current_state in (STATE_IDLE, STATE_REVIEW):
         dx = acc_sample[0] - detector.gravity[0]
         dy = acc_sample[1] - detector.gravity[1]
         dz = acc_sample[2] - detector.gravity[2]
-        
+
         if math.sqrt(dx**2 + dy**2 + dz**2) > 0.35:
             last_activity_ms = now
             if not is_display_on:
