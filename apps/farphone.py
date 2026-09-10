@@ -4,8 +4,9 @@ import machine
 from machine import Pin
 import M5
 from M5 import BtnA, BtnB, Imu, Lcd, Power, Speaker
-from libs.network_client import get_user_profile, update_user_points
+from libs.network_client import update_user_points, initial_sync
 from libs.motion_detector import SmartMotionDetector
+from libs.offline_storage import save_pending_sync, get_pending_syncs
 
 # ==============================================================================
 # 1. HARDWARE & SETUP
@@ -16,7 +17,7 @@ Lcd.clear(0x000000)
 
 try:
     led = Pin(10, Pin.OUT)
-    led.value(1)  # 1 = spento
+    led.value(1)  # 1 = spento (active-low)
 except Exception:
     led = None
 
@@ -55,9 +56,24 @@ detector = SmartMotionDetector(
 )
 
 # ==============================================================================
-# 2. PIXEL ART SPRITES (Stardew Valley Style)
+# 2. AUDIO PLAYBACK HELPER
 # ==============================================================================
-# Palette 16-bit RGB565 tipica da fattoria
+def play_wav(path, volume=240):
+    """Riproduce un file WAV assicurando lo spegnimento dell'amplificatore a fine traccia."""
+    try:
+        Speaker.begin()
+        Speaker.setVolume(volume)
+        Speaker.playWavFile(path)
+        while Speaker.isPlaying():
+            time.sleep_ms(20)
+        Speaker.stop()
+        Speaker.end()
+    except Exception as e:
+        print(f"[Audio] Error playing {path}:", e)
+
+# ==============================================================================
+# 3. PIXEL ART SPRITES (Stardew Valley Style)
+# ==============================================================================
 C_SOIL_DARK = 0x4A2500
 C_SOIL_LIGHT = 0x733804
 C_STEM_GREEN = 0x248810
@@ -66,76 +82,60 @@ C_WITHER_BROWN = 0x633919
 C_WITHER_LEAF = 0x8C5224
 
 def draw_tilled_soil(cx, cy):
-    # Base di terra arata zollosa
     Lcd.fillRect(cx - 24, cy + 18, 48, 10, C_SOIL_DARK)
     Lcd.fillRect(cx - 20, cy + 16, 40, 3, C_SOIL_LIGHT)
     Lcd.fillRect(cx - 16, cy + 22, 10, 2, C_SOIL_LIGHT)
     Lcd.fillRect(cx + 8, cy + 20, 12, 2, C_SOIL_LIGHT)
 
 def draw_sprout(cx, cy):
-    # Fase 1: Germoglio comune a tutte le colture
     draw_tilled_soil(cx, cy)
     Lcd.fillRect(cx - 1, cy + 8, 3, 10, C_STEM_GREEN)
     Lcd.fillRect(cx - 6, cy + 4, 5, 4, C_LEAF_BRIGHT)
     Lcd.fillRect(cx + 2, cy + 2, 6, 4, C_LEAF_BRIGHT)
 
 def draw_growing_plant(cx, cy):
-    # Fase 2: Fusto vigoroso con 4 foglie
     draw_tilled_soil(cx, cy)
     Lcd.fillRect(cx - 2, cy - 2, 4, 20, C_STEM_GREEN)
-    # Foglie inferiori
     Lcd.fillRect(cx - 10, cy + 6, 8, 4, C_LEAF_BRIGHT)
     Lcd.fillRect(cx + 2, cy + 4, 9, 4, C_LEAF_BRIGHT)
-    # Foglie superiori
     Lcd.fillRect(cx - 8, cy - 2, 6, 4, C_LEAF_BRIGHT)
     Lcd.fillRect(cx + 2, cy - 4, 7, 4, C_LEAF_BRIGHT)
 
 def draw_parsnip_mature(cx, cy):
-    # Fase 3: Pastinaca (radice dorata/crema + ciuffo)
     draw_tilled_soil(cx, cy)
     Lcd.fillRect(cx - 1, cy + 4, 3, 14, C_STEM_GREEN)
     Lcd.fillRect(cx - 7, cy + 2, 6, 3, C_LEAF_BRIGHT)
     Lcd.fillRect(cx + 2, cy + 1, 6, 3, C_LEAF_BRIGHT)
-    # Radice dorata Stardew
     Lcd.fillRect(cx - 6, cy - 12, 12, 14, 0xFFE082)
     Lcd.fillRect(cx - 4, cy + 2, 8, 4, 0xFFCA28)
     Lcd.fillRect(cx - 2, cy + 6, 4, 3, 0xD4A017)
 
 def draw_blueberry_mature(cx, cy):
-    # Fase 3: Cespuglio di mirtilli carichi
     draw_tilled_soil(cx, cy)
     Lcd.fillRect(cx - 14, cy - 8, 28, 26, C_STEM_GREEN)
     Lcd.fillRect(cx - 12, cy - 10, 24, 4, C_LEAF_BRIGHT)
-    # Bacche blu brillante
     Lcd.fillRect(cx - 9, cy - 4, 6, 6, 0x2266FF)
     Lcd.fillRect(cx + 3, cy - 6, 6, 6, 0x1144DD)
     Lcd.fillRect(cx - 4, cy + 4, 7, 7, 0x4488FF)
     Lcd.fillRect(cx + 4, cy + 6, 6, 6, 0x2266FF)
 
 def draw_ancient_fruit_mature(cx, cy):
-    # Fase 3: Frutto Antico azzurro-cianico brillante
     draw_tilled_soil(cx, cy)
     Lcd.fillRect(cx - 2, cy - 4, 5, 22, 0x1A591E)
-    # Viticci dorati
     Lcd.fillRect(cx - 10, cy + 8, 8, 3, 0xFFA000)
     Lcd.fillRect(cx + 3, cy + 5, 8, 3, 0xFFA000)
-    # Bulbo mistico
     Lcd.fillRect(cx - 8, cy - 16, 17, 18, 0x05E5D0)
     Lcd.fillRect(cx - 6, cy - 18, 13, 3, 0x76FFEA)
     Lcd.fillRect(cx - 3, cy - 10, 7, 8, 0xFFFFFF)
 
 def draw_withered_crop(cx, cy):
-    # Coltura appassita (Breach of Contract)
     draw_tilled_soil(cx, cy)
     Lcd.fillRect(cx - 2, cy + 2, 4, 16, C_WITHER_BROWN)
-    # Foglie piegate verso il suolo
     Lcd.fillRect(cx - 10, cy + 10, 9, 4, C_WITHER_LEAF)
     Lcd.fillRect(cx + 1, cy + 12, 10, 4, C_WITHER_LEAF)
-    # Fusto cadente
     Lcd.fillRect(cx - 6, cy - 2, 8, 5, C_WITHER_BROWN)
 
 def draw_crop_stage(crop_key, progress_ratio, cx=67, cy=72):
-    """Disegna lo sprite corretto in base alla % del contratto."""
     if progress_ratio < 0.25:
         draw_sprout(cx, cy)
     elif progress_ratio < 0.80:
@@ -151,7 +151,7 @@ def draw_crop_stage(crop_key, progress_ratio, cx=67, cy=72):
             draw_growing_plant(cx, cy)
 
 # ==============================================================================
-# 3. MODELLO DATI CONTRATTI & STATO
+# 4. MODELLO DATI CONTRATTI & STATO
 # ==============================================================================
 USER_ID = "1d27f428-ac94-4f9e-82d0-f2a62e6c2bea"
 user_name = "Connecting..."
@@ -211,13 +211,11 @@ def read_accel():
         return 0.0, 0.0, 0.0
 
 # ==============================================================================
-# 4. GRAFICA & UI
+# 5. GRAFICA & UI
 # ==============================================================================
 def trigger_breach_alert():
     display_on()
     Lcd.clear(0x000000)
-    
-    # Sprite coltura morta al centro
     draw_withered_crop(67, 75)
     
     Lcd.setFont(M5.Lcd.FONTS.DejaVu18)
@@ -233,17 +231,9 @@ def trigger_breach_alert():
     Lcd.setCursor(20, 198)
     Lcd.print("Seed Lost: 0 XP")
 
-    try:
-        Speaker.begin()
-        Speaker.setVolume(240)
-        Speaker.playWavFile("res/audio/pingu.wav")
-        while Speaker.isPlaying():
-            time.sleep_ms(20)
-        Speaker.stop()
-        Speaker.end()
-    except Exception as e:
-        print("[Audio] Playback error:", e)
-    time.sleep_ms(2000)
+    # Suono di fallimento
+    play_wav("res/audio/whistle.wav")
+    time.sleep_ms(1500)
 
 def render_sync_console(step_text):
     display_on()
@@ -261,14 +251,12 @@ def render_contract_review():
     Lcd.clear(0x000000)
     crop = CROPS[selected_crop_idx]
 
-    # Titolo stile pergamena Stardew
     Lcd.setFont(M5.Lcd.FONTS.DejaVu12)
     Lcd.setTextColor(0xFFA500, 0x000000)
     Lcd.setCursor(10, 12)
     Lcd.print("CROP CONTRACT")
     Lcd.drawLine(8, 28, 127, 28, 0x553311)
 
-    # Dettagli del patto agricolo
     Lcd.setTextColor(0x888888, 0x000000)
     Lcd.setCursor(8, 38)
     Lcd.print("Seed Type:")
@@ -291,7 +279,6 @@ def render_contract_review():
     Lcd.setCursor(8, 130)
     Lcd.print(f"+{crop['bonus']} XP + Crop")
 
-    # Bottoni firma
     Lcd.drawLine(8, 154, 127, 154, 0x444444)
     Lcd.setTextColor(0x00AAFF, 0x000000)
     Lcd.setCursor(6, 170)
@@ -318,7 +305,6 @@ def render_ui():
 
     crop = CROPS[selected_crop_idx]
 
-    # --- SCHERMATA IDLE (Fattoria in Standby) ---
     if current_state == STATE_IDLE:
         Lcd.setFont(M5.Lcd.FONTS.DejaVu18)
         Lcd.setTextColor(0x00FF88, 0x000000)
@@ -332,7 +318,6 @@ def render_ui():
         Lcd.setCursor(8, 66)
         Lcd.print(f"Total: {total_points} XP")
 
-        # Selezione Seme Corrente
         Lcd.setTextColor(0x888888, 0x000000)
         Lcd.setCursor(8, 95)
         Lcd.print("Ready to plant:")
@@ -350,7 +335,6 @@ def render_ui():
         Lcd.setCursor(8, 195)
         Lcd.print(f"Last Yield: +{score}")
 
-    # --- SCHERMATA FOCUS (Contratto Attivo + Piantina Pixel Art) ---
     elif current_state == STATE_FOCUS:
         target_sec = crop["target_sec"]
         remaining = max(0, target_sec - focus_seconds)
@@ -358,23 +342,19 @@ def render_ui():
         secs = remaining % 60
         progress_ratio = min(1.0, focus_seconds / target_sec)
 
-        # 1. Disegna lo sprite evolutivo in pixel art
         draw_crop_stage(crop["id"], progress_ratio, cx=67, cy=55)
 
-        # 2. Timer Countdown in stile vintage
         Lcd.setFont(M5.Lcd.FONTS.DejaVu18)
         Lcd.setTextColor(0xFFFFFF, 0x000000)
         Lcd.setCursor(42, 100)
         Lcd.print(f"{mins:02d}:{secs:02d}")
 
-        # 3. Progress Bar Grafica (Pixelata)
         bar_x, bar_y, bar_w, bar_h = 15, 130, 105, 10
         Lcd.drawRect(bar_x, bar_y, bar_w, bar_h, 0x444444)
         fill_w = int(bar_w * progress_ratio)
         if fill_w > 0:
             Lcd.fillRect(bar_x, bar_y, fill_w, bar_h, crop["color"])
 
-        # 4. Status
         Lcd.setFont(M5.Lcd.FONTS.DejaVu12)
         Lcd.setTextColor(0x00FF88, 0x000000)
         Lcd.setCursor(18, 155)
@@ -385,7 +365,7 @@ def render_ui():
         Lcd.print("PHONE LOCKED")
 
 # ==============================================================================
-# 5. TRANSIZIONI & GESTIONE SESSIONE
+# 6. TRANSIZIONI & GESTIONE SESSIONE
 # ==============================================================================
 def start_session():
     global current_state, session_start_ms, focus_seconds, score, last_ui_tick, last_activity_ms
@@ -405,7 +385,7 @@ def start_session():
 def interrupt_session():
     global current_state, last_activity_ms, score, total_points
     current_state = STATE_INTERRUPTED
-    score = 0  # Infranto il patto = 0 XP e raccolto perso
+    score = 0
 
     trigger_breach_alert()
 
@@ -422,7 +402,7 @@ def complete_session():
     crop = CROPS[selected_crop_idx]
     score = crop["bonus"]
 
-    # Schermata di Raccolto Riuscito
+    # --- RENDER UI VITTORIA + AUDIO ---
     Lcd.clear(0x000000)
     draw_crop_stage(crop["id"], 1.0, cx=67, cy=60)
     
@@ -438,40 +418,63 @@ def complete_session():
     Lcd.setTextColor(0xFFFF00, 0x000000)
     Lcd.setCursor(12, 172)
     Lcd.print(f"+{score} XP")
-    time.sleep_ms(2500)
 
-    # Invia sia i punti sia il crop.id al backend
+    play_wav("res/audio/harvest.wav")
+    time.sleep_ms(150)
+    play_wav("res/audio/reward.wav")
+    time.sleep_ms(800)
+
+    # I punti vengono accreditati subito a video in locale
+    total_points += score
+
+    # --- TENTATIVO DI INVIO ---
+    synced = False
     try:
-        if update_user_points(USER_ID, score, plant_type=crop["id"], log_cb=render_sync_console):
-            total_points += score
+        synced = update_user_points(USER_ID, score, plant_type=crop["id"], log_cb=render_sync_console)
     except Exception as e:
-        print("[Sync] Harvest update error:", e)
+        print("[Sync] Errore rete:", e)
+
+    if not synced:
+        # Fallimento Wi-Fi o HTTP: salviamo nella flash
+        save_pending_sync(score, crop["id"])
+        if render_sync_console:
+            render_sync_console("SAVED OFFLINE")
+        time.sleep_ms(1000)
 
     last_activity_ms = time.ticks_ms()
     render_ui()
 
 # ==============================================================================
-# 6. BOOTSTRAP INIZIALE
+# 7. BOOTSTRAP INIZIALE
 # ==============================================================================
 render_ui()
 
+# Controlliamo se ci sono dati offline locali da sommare subito a display
+local_pending = get_pending_syncs()
+offline_accumulated = sum(item.get("score", 0) for item in local_pending)
+
 try:
-    profile = get_user_profile(USER_ID, log_cb=render_sync_console)
-    if profile:
-        user_name = profile.get("username", "Farmer")
-        total_points = profile.get("totalPoints", 0)
+    profile = initial_sync(USER_ID, log_cb=render_sync_console)
+    print("[Boot] Risultato initial_sync:", profile)
+    
+    if profile and isinstance(profile, dict) and profile.get("username"):
+        user_name = profile["username"]
+        total_points = profile["totalPoints"]
     else:
         user_name = "Offline"
+        # Se siamo offline, mostra i punti accumulati localmente
+        total_points = offline_accumulated
 except Exception as err:
     print("[Boot] Sync profilazione fallita:", err)
     user_name = "Offline"
+    total_points = offline_accumulated
 
 last_activity_ms = time.ticks_ms()
 display_on()
 render_ui()
 
 # ==============================================================================
-# 7. MAIN LOOP
+# 8. MAIN LOOP
 # ==============================================================================
 while True:
     M5.update()
@@ -510,9 +513,8 @@ while True:
                 display_on()
                 render_ui()
 
-    # --- STATO FOCUS (COLTIVAZIONE IN CORSO) ---
+    # --- STATO FOCUS (COLTIVAZIONE ATTIVA) ---
     if current_state == STATE_FOCUS:
-        # Rilevamento violazione fisica (spostamento smartphone)
         if detector.update(acc_sample):
             interrupt_session()
             continue
@@ -536,7 +538,7 @@ while True:
             if is_display_on:
                 render_ui()
 
-        # Risparmio energetico display
+        # Timeout spegnimento display
         if is_display_on:
             is_peeking = time.ticks_diff(peek_until_ms, now) > 0
             if not is_peeking and time.ticks_diff(now, last_activity_ms) > SCREEN_TIMEOUT_MS:
