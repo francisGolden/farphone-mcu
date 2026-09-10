@@ -365,33 +365,55 @@ def render_ui():
         Lcd.print(f"Last Yield: +{score}")
 
     elif current_state == STATE_FOCUS:
+        # 1. Pulisce completamente lo sfondo a nero puro
+        Lcd.clear(0x000000)
+
+        # Batteria in alto a destra
+        bat = get_battery_percentage()
+        bat_color = 0x00FF00 if bat > 30 else (0xFFFF00 if bat > 15 else 0xFF0000)
+        Lcd.setFont(M5.Lcd.FONTS.DejaVu12)
+        Lcd.setTextColor(bat_color, 0x000000)
+        Lcd.setCursor(95, 6)
+        Lcd.print(f"{bat}%")
+
         target_sec = crop["target_sec"]
         remaining = max(0, target_sec - focus_seconds)
         mins = remaining // 60
         secs = remaining % 60
         progress_ratio = min(1.0, focus_seconds / target_sec)
 
+        # 2. Sprite centrato a X=67 (metà esatta di 135px)
         draw_crop_stage(crop["id"], progress_ratio, cx=67, cy=55)
 
+        # 3. Timer Countdown centrato
         Lcd.setFont(M5.Lcd.FONTS.DejaVu18)
         Lcd.setTextColor(0xFFFFFF, 0x000000)
-        Lcd.setCursor(42, 100)
+        Lcd.setCursor(40, 95)
         Lcd.print(f"{mins:02d}:{secs:02d}")
 
-        bar_x, bar_y, bar_w, bar_h = 15, 130, 105, 10
+        # 4. Progress Bar (105px di larghezza, margini 15px per lato)
+        bar_x, bar_y, bar_w, bar_h = 15, 125, 105, 9
         Lcd.drawRect(bar_x, bar_y, bar_w, bar_h, 0x444444)
         fill_w = int(bar_w * progress_ratio)
         if fill_w > 0:
             Lcd.fillRect(bar_x, bar_y, fill_w, bar_h, crop["color"])
 
+        # 5. Testo Coltura (abbreviato o centrato con font 12)
         Lcd.setFont(M5.Lcd.FONTS.DejaVu12)
         Lcd.setTextColor(0x00FF88, 0x000000)
-        Lcd.setCursor(18, 155)
-        Lcd.print(f"Growing {crop['name']}")
+        # Tronca se troppo lungo per evitare wrapping
+        crop_txt = f"{crop['name'][:9]}"
+        Lcd.setCursor(14, 150)
+        Lcd.print(f"Crop: {crop_txt}")
 
-        Lcd.setTextColor(0x555555, 0x000000)
-        Lcd.setCursor(18, 195)
+        # 6. Phone Locked ben spaziato
+        Lcd.setTextColor(0xFFA500, 0x000000)
+        Lcd.setCursor(16, 175)
         Lcd.print("PHONE LOCKED")
+        
+        Lcd.setTextColor(0x555555, 0x000000)
+        Lcd.setCursor(22, 200)
+        Lcd.print("DO NOT MOVE")
 
 # ==============================================================================
 # 6. TRANSIZIONI & GESTIONE SESSIONE
