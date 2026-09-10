@@ -59,7 +59,7 @@ detector = SmartMotionDetector(
 # 2. AUDIO PLAYBACK HELPER
 # ==============================================================================
 def play_wav(path, volume=240):
-    """Riproduce un file WAV assicurando lo spegnimento dell'amplificatore a fine traccia."""
+    """Riproduce un file WAV assicurando lo spegnimento dell'amplificatore I2S a fine traccia."""
     try:
         Speaker.begin()
         Speaker.setVolume(volume)
@@ -74,12 +74,16 @@ def play_wav(path, volume=240):
 # ==============================================================================
 # 3. PIXEL ART SPRITES (Stardew Valley Style)
 # ==============================================================================
-C_SOIL_DARK = 0x4A2500
-C_SOIL_LIGHT = 0x733804
-C_STEM_GREEN = 0x248810
-C_LEAF_BRIGHT = 0x5CD632
-C_WITHER_BROWN = 0x633919
-C_WITHER_LEAF = 0x8C5224
+# Palette base
+C_SOIL_DARK    = 0x4A2500
+C_SOIL_LIGHT   = 0x733804
+C_STEM_GREEN   = 0x248810
+C_LEAF_BRIGHT  = 0x5CD632
+
+# Palette pianta morta / appassita (toni terra secca e fieno)
+C_DEAD_STEM    = 0x5A5928  # Stelo ingiallito/secco
+C_DEAD_LEAF    = 0x826C34  # Foglia marrone morta
+C_DEAD_SHADOW  = 0x52441E  # Ombra foglia secca
 
 def draw_tilled_soil(cx, cy):
     Lcd.fillRect(cx - 24, cy + 18, 48, 10, C_SOIL_DARK)
@@ -129,11 +133,28 @@ def draw_ancient_fruit_mature(cx, cy):
     Lcd.fillRect(cx - 3, cy - 10, 7, 8, 0xFFFFFF)
 
 def draw_withered_crop(cx, cy):
+    """
+    Sprite pixel art stile Stardew Valley:
+    stelo secco piegato a U verso il suolo, foglia accartocciata cadente
+    e foglia marrone staccata a terra.
+    """
     draw_tilled_soil(cx, cy)
-    Lcd.fillRect(cx - 2, cy + 2, 4, 16, C_WITHER_BROWN)
-    Lcd.fillRect(cx - 10, cy + 10, 9, 4, C_WITHER_LEAF)
-    Lcd.fillRect(cx + 1, cy + 12, 10, 4, C_WITHER_LEAF)
-    Lcd.fillRect(cx - 6, cy - 2, 8, 5, C_WITHER_BROWN)
+
+    # Stelo verticale secco
+    Lcd.fillRect(cx - 8, cy + 6, 4, 11, C_DEAD_STEM)
+    
+    # Curva ad arco dello stelo spezzato
+    Lcd.fillRect(cx - 6, cy + 2, 4, 4, C_DEAD_STEM)
+    Lcd.fillRect(cx - 2, cy - 4, 6, 4, C_DEAD_STEM)
+    Lcd.fillRect(cx + 4, cy - 1, 4, 4, C_DEAD_STEM)
+    
+    # Apice cadente con foglia appassita
+    Lcd.fillRect(cx + 6, cy + 2, 6, 5, C_DEAD_LEAF)
+    Lcd.fillRect(cx + 9, cy + 6, 4, 3, C_DEAD_SHADOW)
+
+    # Foglia morta staccata e caduta a terra sulla destra
+    Lcd.fillRect(cx + 12, cy + 14, 5, 3, C_DEAD_LEAF)
+    Lcd.fillRect(cx + 16, cy + 15, 3, 2, C_DEAD_SHADOW)
 
 def draw_crop_stage(crop_key, progress_ratio, cx=67, cy=72):
     if progress_ratio < 0.25:
@@ -216,16 +237,18 @@ def read_accel():
 def trigger_breach_alert():
     display_on()
     Lcd.clear(0x000000)
+    
+    # Sprite della pianta appassita
     draw_withered_crop(67, 75)
     
     Lcd.setFont(M5.Lcd.FONTS.DejaVu18)
     Lcd.setTextColor(0xFF2222, 0x000000)
-    Lcd.setCursor(8, 140)
+    Lcd.setCursor(8, 138)
     Lcd.print("CROP WITHERED")
 
     Lcd.setFont(M5.Lcd.FONTS.DejaVu12)
-    Lcd.setTextColor(0xAAAAAA, 0x000000)
-    Lcd.setCursor(14, 172)
+    Lcd.setTextColor(0xFF6666, 0x000000)
+    Lcd.setCursor(20, 194)
     Lcd.print("Seed Lost: 0 XP")
 
     # Suono di fallimento
@@ -367,8 +390,14 @@ def render_ui():
 def start_session():
     global current_state, session_start_ms, focus_seconds, score, last_ui_tick, last_activity_ms
     display_on()
+    
+    # 1. Suono di semina prima di armare l'IMU
     play_wav("res/audio/seeds.wav")
+    
+    # 2. Assestamento per evitare che vibrazioni audio/meccaniche creino falsi positivi
     time.sleep_ms(CALIBRATION_SETTLE_MS)
+    
+    # 3. Calibrazione di zero assoluto dell'accelerometro
     detector.reset_reference(read_accel())
 
     focus_seconds = 0
@@ -422,10 +451,10 @@ def complete_session():
     play_wav("res/audio/reward.wav")
     time.sleep_ms(800)
 
-    # I punti vengono accreditati subito a video in locale
+    # Accredito immediato a display in locale
     total_points += score
 
-    # --- TENTATIVO DI INVIO ---
+    # --- TENTATIVO DI SINCRONIZZAZIONE RETE ---
     synced = False
     try:
         synced = update_user_points(USER_ID, score, plant_type=crop["id"], log_cb=render_sync_console)
@@ -433,7 +462,6 @@ def complete_session():
         print("[Sync] Errore rete:", e)
 
     if not synced:
-        # Fallimento Wi-Fi o HTTP: salviamo nella flash
         save_pending_sync(score, crop["id"])
         if render_sync_console:
             render_sync_console("SAVED OFFLINE")
@@ -447,7 +475,6 @@ def complete_session():
 # ==============================================================================
 render_ui()
 
-# Controlliamo se ci sono dati offline locali da sommare subito a display
 local_pending = get_pending_syncs()
 offline_accumulated = sum(item.get("score", 0) for item in local_pending)
 
@@ -460,7 +487,6 @@ try:
         total_points = profile["totalPoints"]
     else:
         user_name = "Offline"
-        # Se siamo offline, mostra i punti accumulati localmente
         total_points = offline_accumulated
 except Exception as err:
     print("[Boot] Sync profilazione fallita:", err)
@@ -524,7 +550,7 @@ while True:
             last_heartbeat_ms = now
             led_blink(15)
 
-        # Tick 1s
+        # Tick di avanzamento al secondo
         if time.ticks_diff(now, last_ui_tick) >= 1000:
             last_ui_tick = now
             focus_seconds += 1
