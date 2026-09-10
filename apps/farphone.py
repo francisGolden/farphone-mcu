@@ -59,14 +59,23 @@ detector = SmartMotionDetector(
 # 2. AUDIO PLAYBACK HELPER
 # ==============================================================================
 def play_wav(path, volume=240):
-    """Riproduce un file WAV assicurando lo spegnimento dell'amplificatore I2S a fine traccia."""
+    """Riproduce un file WAV azzerando il bias prima dello spegnimento hardware."""
     try:
         Speaker.begin()
         Speaker.setVolume(volume)
         Speaker.playWavFile(path)
         while Speaker.isPlaying():
             time.sleep_ms(20)
+            
+        # 1. Fade-out hardware a zero per azzerare il DC offset
+        Speaker.setVolume(0)
+        time.sleep_ms(40)  # Tempo di scarica per il filtro passa-basso
+        
+        # 2. Stop dello stream I2S
         Speaker.stop()
+        time.sleep_ms(20)
+        
+        # 3. Disalimentazione dell'amplificatore
         Speaker.end()
     except Exception as e:
         print(f"[Audio] Error playing {path}:", e)
