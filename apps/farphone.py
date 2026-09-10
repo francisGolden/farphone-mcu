@@ -226,9 +226,6 @@ def trigger_breach_alert():
     Lcd.setFont(M5.Lcd.FONTS.DejaVu12)
     Lcd.setTextColor(0xAAAAAA, 0x000000)
     Lcd.setCursor(14, 172)
-    Lcd.print("Contract Breached!")
-    Lcd.setTextColor(0xFF6666, 0x000000)
-    Lcd.setCursor(20, 198)
     Lcd.print("Seed Lost: 0 XP")
 
     # Suono di fallimento
@@ -370,6 +367,7 @@ def render_ui():
 def start_session():
     global current_state, session_start_ms, focus_seconds, score, last_ui_tick, last_activity_ms
     display_on()
+    play_wav("res/audio/seeds.wav")
     time.sleep_ms(CALIBRATION_SETTLE_MS)
     detector.reset_reference(read_accel())
 
