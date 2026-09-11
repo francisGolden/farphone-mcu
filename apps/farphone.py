@@ -1,15 +1,16 @@
 import math
 import time
+import random
 import machine
 from machine import Pin
 import M5
 from M5 import BtnA, BtnB, Imu, Lcd, Power, Speaker
-from libs.network_client import update_user_points, initial_sync
+from libs.network_client import update_user_points, initial_sync, fetch_user_raw, connect_wifi, disconnect_wifi
 from libs.motion_detector import SmartMotionDetector
 from libs.offline_storage import save_pending_sync, get_pending_syncs
 
 # ==============================================================================
-# 1. HARDWARE & SETUP
+# 1. HARDWARE & POWER TUNING
 # ==============================================================================
 M5.begin()
 Lcd.setBrightness(80)
@@ -17,7 +18,7 @@ Lcd.clear(0x000000)
 
 try:
     led = Pin(10, Pin.OUT)
-    led.value(1)  # 1 = spento (active-low)
+    led.value(1)  # Active-low: 1 = OFF
 except Exception:
     led = None
 
@@ -56,43 +57,131 @@ detector = SmartMotionDetector(
 )
 
 # ==============================================================================
-# 2. AUDIO PLAYBACK HELPER
+# 2. AUDIO PLAYBACK (Anti-Pop Safe)
 # ==============================================================================
 def play_wav(path, volume=240):
-    """Riproduce un file WAV azzerando il bias prima dello spegnimento hardware."""
     try:
         Speaker.begin()
         Speaker.setVolume(volume)
         Speaker.playWavFile(path)
         while Speaker.isPlaying():
             time.sleep_ms(20)
-            
-        # 1. Fade-out hardware a zero per azzerare il DC offset
+        # Discharge hardware bias gradually to eliminate popping
         Speaker.setVolume(0)
-        time.sleep_ms(40)  # Tempo di scarica per il filtro passa-basso
-        
-        # 2. Stop dello stream I2S
+        time.sleep_ms(40)
         Speaker.stop()
         time.sleep_ms(20)
-        
-        # 3. Disalimentazione dell'amplificatore
         Speaker.end()
     except Exception as e:
-        print(f"[Audio] Error playing {path}:", e)
+        print(f"[Audio] Playback error {path}:", e)
 
 # ==============================================================================
-# 3. PIXEL ART SPRITES (Stardew Valley Style)
+# 3. INTENT SEEDS CATALOG & CROP LOOT TABLE
 # ==============================================================================
-# Palette base
-C_SOIL_DARK    = 0x4A2500
-C_SOIL_LIGHT   = 0x733804
-C_STEM_GREEN   = 0x248810
-C_LEAF_BRIGHT  = 0x5CD632
+# Rarity tiers: COM (60%), RAR (30%), LEG (10%)
+SEEDS_CATALOG = [
+    {
+        "id": "SEED_STUDY",
+        "name": "Study",
+        "target_sec": 45 * 60,
+        "bonus_base": 600,
+        "accent_color": 0x44AAFF,
+        "pool": [
+            {"id": "ROSEMARY", "name": "Rosemary",      "rarity": "COM", "xp_mul": 1.0},
+            {"id": "MINT",     "name": "Peppermint",    "rarity": "COM", "xp_mul": 1.0},
+            {"id": "SALVIA",   "name": "White Sage",    "rarity": "RAR", "xp_mul": 1.5},
+            {"id": "GINKGO",   "name": "Ginkgo Biloba", "rarity": "LEG", "xp_mul": 2.5}
+        ]
+    },
+    {
+        "id": "SEED_WORK",
+        "name": "Work",
+        "target_sec": 30 * 60,
+        "bonus_base": 500,
+        "accent_color": 0xFFA500,
+        "pool": [
+            {"id": "COFFEE",    "name": "Coffee Bean",  "rarity": "COM", "xp_mul": 1.0},
+            {"id": "BLACK_TEA", "name": "Black Tea",    "rarity": "COM", "xp_mul": 1.0},
+            {"id": "GUARANA",   "name": "Wild Guarana", "rarity": "RAR", "xp_mul": 1.5},
+            {"id": "CACAO",     "name": "Sacred Cacao", "rarity": "LEG", "xp_mul": 2.5}
+        ]
+    },
+    {
+        "id": "SEED_NIGHT",
+        "name": "Night",
+        "target_sec": 60 * 60,
+        "bonus_base": 1200,
+        "accent_color": 0x9955FF,
+        "pool": [
+            {"id": "CHAMOMILE", "name": "Chamomile",    "rarity": "COM", "xp_mul": 1.0},
+            {"id": "LAVENDER",  "name": "Blue Lavender","rarity": "COM", "xp_mul": 1.0},
+            {"id": "VALERIAN",  "name": "Valerian",     "rarity": "RAR", "xp_mul": 1.5},
+            {"id": "MOON_LILY", "name": "Moon Lily",    "rarity": "LEG", "xp_mul": 3.0}
+        ]
+    },
+    {
+        "id": "SEED_PRAYER",
+        "name": "Prayer",
+        "target_sec": 20 * 60,
+        "bonus_base": 350,
+        "accent_color": 0xFFDD44,
+        "pool": [
+            {"id": "MYRTLE", "name": "Myrtle",      "rarity": "COM", "xp_mul": 1.0},
+            {"id": "OLIVE",  "name": "Olive Branch","rarity": "RAR", "xp_mul": 1.5},
+            {"id": "BODHI",  "name": "Bodhi Leaf",  "rarity": "LEG", "xp_mul": 3.0}
+        ]
+    },
+    {
+        "id": "SEED_DIGEST",
+        "name": "Digest",
+        "target_sec": 15 * 60,
+        "bonus_base": 250,
+        "accent_color": 0x5CD632,
+        "pool": [
+            {"id": "FENNEL",    "name": "Wild Fennel",  "rarity": "COM", "xp_mul": 1.0},
+            {"id": "MELISSA",   "name": "Sweet Melissa","rarity": "COM", "xp_mul": 1.0},
+            {"id": "GINGER",    "name": "Golden Ginger","rarity": "RAR", "xp_mul": 1.5},
+            {"id": "GOLD_ROOT", "name": "Sun Root",     "rarity": "LEG", "xp_mul": 2.5}
+        ]
+    },
+    {
+        "id": "SEED_PLAY",
+        "name": "Play",
+        "target_sec": 60,  # 1 min test sprint
+        "bonus_base": 100,
+        "accent_color": 0xFF44AA,
+        "pool": [
+            {"id": "CLOVER",     "name": "Trifolium",    "rarity": "COM", "xp_mul": 1.0},
+            {"id": "DANDELION",  "name": "Dandelion",    "rarity": "COM", "xp_mul": 1.0},
+            {"id": "RED_SHROOM", "name": "Red Mushroom", "rarity": "RAR", "xp_mul": 1.5},
+            {"id": "LUCKY_4",    "name": "Four-Leaf",    "rarity": "LEG", "xp_mul": 3.0}
+        ]
+    }
+]
 
-# Palette pianta morta / appassita (toni terra secca e fieno)
-C_DEAD_STEM    = 0x5A5928  # Stelo ingiallito/secco
-C_DEAD_LEAF    = 0x826C34  # Foglia marrone morta
-C_DEAD_SHADOW  = 0x52441E  # Ombra foglia secca
+def roll_random_crop(seed_data):
+    roll = random.randint(1, 100)
+    target_rarity = "COM"
+    if roll > 90:
+        target_rarity = "LEG"
+    elif roll > 60:
+        target_rarity = "RAR"
+
+    candidates = [p for p in seed_data["pool"] if p["rarity"] == target_rarity]
+    if not candidates:
+        candidates = seed_data["pool"]
+    return random.choice(candidates)
+
+# ==============================================================================
+# 4. PIXEL ART ENGINE
+# ==============================================================================
+C_SOIL_DARK   = 0x4A2500
+C_SOIL_LIGHT  = 0x733804
+C_STEM_GREEN  = 0x248810
+C_LEAF_BRIGHT = 0x5CD632
+C_DEAD_STEM   = 0x5A5928
+C_DEAD_LEAF   = 0x826C34
+C_DEAD_SHADOW = 0x52441E
 
 def draw_tilled_soil(cx, cy):
     Lcd.fillRect(cx - 24, cy + 18, 48, 10, C_SOIL_DARK)
@@ -100,88 +189,45 @@ def draw_tilled_soil(cx, cy):
     Lcd.fillRect(cx - 16, cy + 22, 10, 2, C_SOIL_LIGHT)
     Lcd.fillRect(cx + 8, cy + 20, 12, 2, C_SOIL_LIGHT)
 
-def draw_sprout(cx, cy):
+def draw_mystery_sprout(cx, cy, progress_ratio):
     draw_tilled_soil(cx, cy)
-    Lcd.fillRect(cx - 1, cy + 8, 3, 10, C_STEM_GREEN)
-    Lcd.fillRect(cx - 6, cy + 4, 5, 4, C_LEAF_BRIGHT)
-    Lcd.fillRect(cx + 2, cy + 2, 6, 4, C_LEAF_BRIGHT)
-
-def draw_growing_plant(cx, cy):
-    draw_tilled_soil(cx, cy)
-    Lcd.fillRect(cx - 2, cy - 2, 4, 20, C_STEM_GREEN)
-    Lcd.fillRect(cx - 10, cy + 6, 8, 4, C_LEAF_BRIGHT)
-    Lcd.fillRect(cx + 2, cy + 4, 9, 4, C_LEAF_BRIGHT)
-    Lcd.fillRect(cx - 8, cy - 2, 6, 4, C_LEAF_BRIGHT)
-    Lcd.fillRect(cx + 2, cy - 4, 7, 4, C_LEAF_BRIGHT)
-
-def draw_parsnip_mature(cx, cy):
-    draw_tilled_soil(cx, cy)
-    Lcd.fillRect(cx - 1, cy + 4, 3, 14, C_STEM_GREEN)
-    Lcd.fillRect(cx - 7, cy + 2, 6, 3, C_LEAF_BRIGHT)
-    Lcd.fillRect(cx + 2, cy + 1, 6, 3, C_LEAF_BRIGHT)
-    Lcd.fillRect(cx - 6, cy - 12, 12, 14, 0xFFE082)
-    Lcd.fillRect(cx - 4, cy + 2, 8, 4, 0xFFCA28)
-    Lcd.fillRect(cx - 2, cy + 6, 4, 3, 0xD4A017)
-
-def draw_blueberry_mature(cx, cy):
-    draw_tilled_soil(cx, cy)
-    Lcd.fillRect(cx - 14, cy - 8, 28, 26, C_STEM_GREEN)
-    Lcd.fillRect(cx - 12, cy - 10, 24, 4, C_LEAF_BRIGHT)
-    Lcd.fillRect(cx - 9, cy - 4, 6, 6, 0x2266FF)
-    Lcd.fillRect(cx + 3, cy - 6, 6, 6, 0x1144DD)
-    Lcd.fillRect(cx - 4, cy + 4, 7, 7, 0x4488FF)
-    Lcd.fillRect(cx + 4, cy + 6, 6, 6, 0x2266FF)
-
-def draw_ancient_fruit_mature(cx, cy):
-    draw_tilled_soil(cx, cy)
-    Lcd.fillRect(cx - 2, cy - 4, 5, 22, 0x1A591E)
-    Lcd.fillRect(cx - 10, cy + 8, 8, 3, 0xFFA000)
-    Lcd.fillRect(cx + 3, cy + 5, 8, 3, 0xFFA000)
-    Lcd.fillRect(cx - 8, cy - 16, 17, 18, 0x05E5D0)
-    Lcd.fillRect(cx - 6, cy - 18, 13, 3, 0x76FFEA)
-    Lcd.fillRect(cx - 3, cy - 10, 7, 8, 0xFFFFFF)
+    if progress_ratio < 0.35:
+        Lcd.fillRect(cx - 1, cy + 8, 3, 10, C_STEM_GREEN)
+        Lcd.fillRect(cx - 6, cy + 4, 5, 4, C_LEAF_BRIGHT)
+        Lcd.fillRect(cx + 2, cy + 2, 6, 4, C_LEAF_BRIGHT)
+    else:
+        Lcd.fillRect(cx - 2, cy - 2, 4, 20, C_STEM_GREEN)
+        Lcd.fillRect(cx - 10, cy + 6, 8, 4, C_LEAF_BRIGHT)
+        Lcd.fillRect(cx + 2, cy + 4, 9, 4, C_LEAF_BRIGHT)
+        # Mystery bud container
+        Lcd.fillRect(cx - 6, cy - 14, 12, 12, 0x8833AA)
+        Lcd.fillRect(cx - 4, cy - 16, 8, 3, 0xBA68C8)
+        Lcd.setTextColor(0xFFFFFF, 0x8833AA)
+        Lcd.setFont(M5.Lcd.FONTS.DejaVu12)
+        Lcd.setCursor(cx - 3, cy - 14)
+        Lcd.print("?")
 
 def draw_withered_crop(cx, cy):
-    """
-    Sprite pixel art stile Stardew Valley:
-    stelo secco piegato a U verso il suolo, foglia accartocciata cadente
-    e foglia marrone staccata a terra.
-    """
     draw_tilled_soil(cx, cy)
-
-    # Stelo verticale secco
     Lcd.fillRect(cx - 8, cy + 6, 4, 11, C_DEAD_STEM)
-    
-    # Curva ad arco dello stelo spezzato
     Lcd.fillRect(cx - 6, cy + 2, 4, 4, C_DEAD_STEM)
     Lcd.fillRect(cx - 2, cy - 4, 6, 4, C_DEAD_STEM)
     Lcd.fillRect(cx + 4, cy - 1, 4, 4, C_DEAD_STEM)
-    
-    # Apice cadente con foglia appassita
     Lcd.fillRect(cx + 6, cy + 2, 6, 5, C_DEAD_LEAF)
-    Lcd.fillRect(cx + 9, cy + 6, 4, 3, C_DEAD_SHADOW)
-
-    # Foglia morta staccata e caduta a terra sulla destra
     Lcd.fillRect(cx + 12, cy + 14, 5, 3, C_DEAD_LEAF)
     Lcd.fillRect(cx + 16, cy + 15, 3, 2, C_DEAD_SHADOW)
 
-def draw_crop_stage(crop_key, progress_ratio, cx=67, cy=72):
-    if progress_ratio < 0.25:
-        draw_sprout(cx, cy)
-    elif progress_ratio < 0.80:
-        draw_growing_plant(cx, cy)
-    else:
-        if crop_key == "PARSNIP":
-            draw_parsnip_mature(cx, cy)
-        elif crop_key == "BLUEBERRY":
-            draw_blueberry_mature(cx, cy)
-        elif crop_key == "ANCIENT_FRUIT":
-            draw_ancient_fruit_mature(cx, cy)
-        else:
-            draw_growing_plant(cx, cy)
+def draw_revealed_plant(cx, cy, rarity_color):
+    draw_tilled_soil(cx, cy)
+    Lcd.drawCircle(cx, cy - 4, 18, rarity_color)
+    Lcd.fillRect(cx - 2, cy - 6, 4, 24, C_STEM_GREEN)
+    Lcd.fillRect(cx - 12, cy + 4, 10, 4, C_LEAF_BRIGHT)
+    Lcd.fillRect(cx + 2, cy + 2, 11, 4, C_LEAF_BRIGHT)
+    Lcd.fillCircle(cx, cy - 8, 9, rarity_color)
+    Lcd.fillCircle(cx, cy - 8, 5, 0xFFFFFF)
 
 # ==============================================================================
-# 4. MODELLO DATI CONTRATTI & STATO
+# 5. STATE & RUNTIME CONFIG
 # ==============================================================================
 USER_ID = "1d27f428-ac94-4f9e-82d0-f2a62e6c2bea"
 user_name = "Connecting..."
@@ -192,31 +238,7 @@ STATE_REVIEW = "REVIEW"
 STATE_FOCUS = "FOCUS"
 STATE_INTERRUPTED = "INTERRUPTED"
 
-CROPS = [
-    {
-        "id": "PARSNIP",
-        "name": "Parsnip",
-        "target_sec": 60,
-        "bonus": 50,
-        "color": 0xFFE082
-    },
-    {
-        "id": "BLUEBERRY",
-        "name": "Blueberry",
-        "target_sec": 30 * 60,
-        "bonus": 500,
-        "color": 0x4488FF
-    },
-    {
-        "id": "ANCIENT_FRUIT",
-        "name": "Ancient Fruit",
-        "target_sec": 60 * 60,
-        "bonus": 1500,
-        "color": 0x05E5D0
-    }
-]
-selected_crop_idx = 0
-
+selected_seed_idx = 0
 current_state = STATE_IDLE
 session_start_ms = 0
 focus_seconds = 0
@@ -241,26 +263,26 @@ def read_accel():
         return 0.0, 0.0, 0.0
 
 # ==============================================================================
-# 5. GRAFICA & UI
+# 6. UI RENDERER
 # ==============================================================================
 def trigger_breach_alert():
     display_on()
     Lcd.clear(0x000000)
-    
-    # Sprite della pianta appassita
     draw_withered_crop(67, 75)
-    
+
     Lcd.setFont(M5.Lcd.FONTS.DejaVu18)
     Lcd.setTextColor(0xFF2222, 0x000000)
     Lcd.setCursor(8, 138)
     Lcd.print("CROP WITHERED")
 
     Lcd.setFont(M5.Lcd.FONTS.DejaVu12)
+    Lcd.setTextColor(0xAAAAAA, 0x000000)
+    Lcd.setCursor(10, 168)
+    Lcd.print("Contract Breached!")
     Lcd.setTextColor(0xFF6666, 0x000000)
-    Lcd.setCursor(20, 194)
+    Lcd.setCursor(18, 194)
     Lcd.print("Seed Lost: 0 XP")
 
-    # Suono di fallimento
     play_wav("res/audio/whistle.wav")
     time.sleep_ms(1500)
 
@@ -278,35 +300,35 @@ def render_sync_console(step_text):
 
 def render_contract_review():
     Lcd.clear(0x000000)
-    crop = CROPS[selected_crop_idx]
+    seed = SEEDS_CATALOG[selected_seed_idx]
 
     Lcd.setFont(M5.Lcd.FONTS.DejaVu12)
     Lcd.setTextColor(0xFFA500, 0x000000)
     Lcd.setCursor(10, 12)
-    Lcd.print("CROP CONTRACT")
+    Lcd.print("INTENT PACT")
     Lcd.drawLine(8, 28, 127, 28, 0x553311)
 
     Lcd.setTextColor(0x888888, 0x000000)
     Lcd.setCursor(8, 38)
-    Lcd.print("Seed Type:")
-    Lcd.setTextColor(crop["color"], 0x000000)
+    Lcd.print("Seed of:")
+    Lcd.setTextColor(seed["accent_color"], 0x000000)
     Lcd.setCursor(8, 54)
-    Lcd.print(crop["name"])
+    Lcd.print(seed["name"])
 
     Lcd.setTextColor(0x888888, 0x000000)
     Lcd.setCursor(8, 76)
-    Lcd.print("Growth Time:")
+    Lcd.print("Pact Target:")
     Lcd.setTextColor(0xFFFFFF, 0x000000)
     Lcd.setCursor(8, 92)
-    mins = crop["target_sec"] // 60
-    Lcd.print(f"{mins} Minutes" if mins > 0 else f"{crop['target_sec']}s")
+    mins = seed["target_sec"] // 60
+    Lcd.print(f"{mins} Minutes" if mins > 0 else f"{seed['target_sec']}s")
 
     Lcd.setTextColor(0x888888, 0x000000)
     Lcd.setCursor(8, 114)
-    Lcd.print("Harvest Yield:")
+    Lcd.print("Possible Yield:")
     Lcd.setTextColor(0x00FF88, 0x000000)
     Lcd.setCursor(8, 130)
-    Lcd.print(f"+{crop['bonus']} XP + Crop")
+    Lcd.print("? Mystery Plant")
 
     Lcd.drawLine(8, 154, 127, 154, 0x444444)
     Lcd.setTextColor(0x00AAFF, 0x000000)
@@ -314,7 +336,7 @@ def render_contract_review():
     Lcd.print("[A] PLANT & LOCK")
     Lcd.setTextColor(0x777777, 0x000000)
     Lcd.setCursor(6, 198)
-    Lcd.print("[B] NEXT SEED")
+    Lcd.print("[B] NEXT INTENT")
 
 def render_ui():
     if not is_display_on:
@@ -329,10 +351,10 @@ def render_ui():
     bat_color = 0x00FF00 if bat > 30 else (0xFFFF00 if bat > 15 else 0xFF0000)
     Lcd.setFont(M5.Lcd.FONTS.DejaVu12)
     Lcd.setTextColor(bat_color, 0x000000)
-    Lcd.setCursor(95, 8)
+    Lcd.setCursor(95, 6)
     Lcd.print(f"{bat}%")
 
-    crop = CROPS[selected_crop_idx]
+    seed = SEEDS_CATALOG[selected_seed_idx]
 
     if current_state == STATE_IDLE:
         Lcd.setFont(M5.Lcd.FONTS.DejaVu18)
@@ -343,92 +365,70 @@ def render_ui():
         Lcd.setFont(M5.Lcd.FONTS.DejaVu12)
         Lcd.setTextColor(0x00AAFF, 0x000000)
         Lcd.setCursor(8, 48)
-        Lcd.print(f"Farm: {user_name}")
+        user_disp = user_name[:9]
+        Lcd.print(f"Farm: {user_disp}")
         Lcd.setCursor(8, 66)
         Lcd.print(f"Total: {total_points} XP")
 
         Lcd.setTextColor(0x888888, 0x000000)
         Lcd.setCursor(8, 95)
-        Lcd.print("Ready to plant:")
-        Lcd.setTextColor(crop["color"], 0x000000)
+        Lcd.print("Intent Selected:")
+        Lcd.setTextColor(seed["accent_color"], 0x000000)
         Lcd.setCursor(8, 112)
-        Lcd.print(f"> {crop['name']} <")
+        Lcd.print(f"> {seed['name']} <")
 
         Lcd.setTextColor(0xAAAAAA, 0x000000)
         Lcd.setCursor(8, 142)
         Lcd.print("[BTN B] Change")
         Lcd.setCursor(8, 162)
-        Lcd.print("[BTN A] Contract")
+        Lcd.print("[BTN A] Pact")
 
         Lcd.setTextColor(0x666666, 0x000000)
         Lcd.setCursor(8, 195)
         Lcd.print(f"Last Yield: +{score}")
 
     elif current_state == STATE_FOCUS:
-        # 1. Pulisce completamente lo sfondo a nero puro
-        Lcd.clear(0x000000)
-
-        # Batteria in alto a destra
-        bat = get_battery_percentage()
-        bat_color = 0x00FF00 if bat > 30 else (0xFFFF00 if bat > 15 else 0xFF0000)
-        Lcd.setFont(M5.Lcd.FONTS.DejaVu12)
-        Lcd.setTextColor(bat_color, 0x000000)
-        Lcd.setCursor(95, 6)
-        Lcd.print(f"{bat}%")
-
-        target_sec = crop["target_sec"]
+        target_sec = seed["target_sec"]
         remaining = max(0, target_sec - focus_seconds)
         mins = remaining // 60
         secs = remaining % 60
         progress_ratio = min(1.0, focus_seconds / target_sec)
 
-        # 2. Sprite centrato a X=67 (metà esatta di 135px)
-        draw_crop_stage(crop["id"], progress_ratio, cx=67, cy=55)
+        draw_mystery_sprout(67, 52, progress_ratio)
 
-        # 3. Timer Countdown centrato
         Lcd.setFont(M5.Lcd.FONTS.DejaVu18)
         Lcd.setTextColor(0xFFFFFF, 0x000000)
         Lcd.setCursor(40, 95)
         Lcd.print(f"{mins:02d}:{secs:02d}")
 
-        # 4. Progress Bar (105px di larghezza, margini 15px per lato)
         bar_x, bar_y, bar_w, bar_h = 15, 125, 105, 9
         Lcd.drawRect(bar_x, bar_y, bar_w, bar_h, 0x444444)
         fill_w = int(bar_w * progress_ratio)
         if fill_w > 0:
-            Lcd.fillRect(bar_x, bar_y, fill_w, bar_h, crop["color"])
+            Lcd.fillRect(bar_x, bar_y, fill_w, bar_h, seed["accent_color"])
 
-        # 5. Testo Coltura (abbreviato o centrato con font 12)
         Lcd.setFont(M5.Lcd.FONTS.DejaVu12)
-        Lcd.setTextColor(0x00FF88, 0x000000)
-        # Tronca se troppo lungo per evitare wrapping
-        crop_txt = f"{crop['name'][:9]}"
-        Lcd.setCursor(14, 150)
-        Lcd.print(f"Crop: {crop_txt}")
+        Lcd.setTextColor(seed["accent_color"], 0x000000)
+        Lcd.setCursor(14, 148)
+        Lcd.print(f"Seed: {seed['name'][:9]}")
 
-        # 6. Phone Locked ben spaziato
         Lcd.setTextColor(0xFFA500, 0x000000)
-        Lcd.setCursor(16, 175)
+        Lcd.setCursor(16, 172)
         Lcd.print("PHONE LOCKED")
-        
+
         Lcd.setTextColor(0x555555, 0x000000)
-        Lcd.setCursor(22, 200)
-        Lcd.print("DO NOT MOVE")
+        Lcd.setCursor(20, 196)
+        Lcd.print("DO NOT TOUCH")
 
 # ==============================================================================
-# 6. TRANSIZIONI & GESTIONE SESSIONE
+# 7. SESSION TRANSITIONS & REVEAL
 # ==============================================================================
 def start_session():
     global current_state, session_start_ms, focus_seconds, score, last_ui_tick, last_activity_ms
     display_on()
-    
-    # 1. Suono di semina prima di armare l'IMU
+
     play_wav("res/audio/seeds.wav")
-    
-    # 2. Assestamento per evitare che vibrazioni audio/meccaniche creino falsi positivi
     time.sleep_ms(CALIBRATION_SETTLE_MS)
-    
-    # 3. Calibrazione di zero assoluto dell'accelerometro
     detector.reset_reference(read_accel())
 
     focus_seconds = 0
@@ -453,47 +453,77 @@ def interrupt_session():
     render_ui()
 
 def complete_session():
-    global current_state, last_activity_ms, score, total_points
+    global current_state, last_activity_ms, score, total_points, user_name
     current_state = STATE_IDLE
     display_on()
 
-    crop = CROPS[selected_crop_idx]
-    score = crop["bonus"]
+    seed = SEEDS_CATALOG[selected_seed_idx]
 
-    # --- RENDER UI VITTORIA + AUDIO ---
+    # 1. Loot Table extraction
+    picked_crop = roll_random_crop(seed)
+    score = int(seed["bonus_base"] * picked_crop["xp_mul"])
+
+    rarity_badge = {
+        "COM": ("COMMON",    0x00FF88),
+        "RAR": ("RARE",      0x00AAFF),
+        "LEG": ("LEGENDARY", 0xFFA500)
+    }[picked_crop["rarity"]]
+
+    # 2. Suspense & Harvest Sound
     Lcd.clear(0x000000)
-    draw_crop_stage(crop["id"], 1.0, cx=67, cy=60)
-    
+    draw_mystery_sprout(67, 60, 1.0)
     Lcd.setFont(M5.Lcd.FONTS.DejaVu18)
-    Lcd.setTextColor(0x00FF88, 0x000000)
-    Lcd.setCursor(12, 120)
-    Lcd.print("HARVESTED!")
+    Lcd.setTextColor(0xFFFFFF, 0x000000)
+    Lcd.setCursor(14, 120)
+    Lcd.print("BLOOMING...")
+    play_wav("res/audio/harvest.wav")
+    time.sleep_ms(600)
+
+    # 3. Reveal Step & Reward Sound
+    Lcd.clear(0x000000)
+    draw_revealed_plant(67, 55, rarity_badge[1])
 
     Lcd.setFont(M5.Lcd.FONTS.DejaVu12)
+    Lcd.setTextColor(rarity_badge[1], 0x000000)
+    Lcd.setCursor(12, 115)
+    Lcd.print(f"[{rarity_badge[0]}]")
+
+    Lcd.setFont(M5.Lcd.FONTS.DejaVu18)
     Lcd.setTextColor(0xFFFFFF, 0x000000)
-    Lcd.setCursor(12, 150)
-    Lcd.print(f"{crop['name']} Added!")
+    Lcd.setCursor(10, 136)
+    Lcd.print(picked_crop["name"][:10])
+
+    Lcd.setFont(M5.Lcd.FONTS.DejaVu12)
     Lcd.setTextColor(0xFFFF00, 0x000000)
-    Lcd.setCursor(12, 172)
+    Lcd.setCursor(12, 168)
     Lcd.print(f"+{score} XP")
 
-    play_wav("res/audio/harvest.wav")
-    time.sleep_ms(150)
     play_wav("res/audio/reward.wav")
-    time.sleep_ms(800)
+    time.sleep_ms(1500)
 
-    # Accredito immediato a display in locale
+    # Optimistic local UI credit
     total_points += score
 
-    # --- TENTATIVO DI SINCRONIZZAZIONE RETE ---
+    # 4. HTTP Synchronisation with In-flight Profile Refresh
     synced = False
     try:
-        synced = update_user_points(USER_ID, score, plant_type=crop["id"], log_cb=render_sync_console)
+        synced = update_user_points(USER_ID, score, plant_type=picked_crop["id"], log_cb=render_sync_console)
+        if synced:
+            # Sync user profile immediately after successful harvest
+            if connect_wifi(log_cb=render_sync_console):
+                try:
+                    fresh_profile = fetch_user_raw(USER_ID)
+                    if fresh_profile and fresh_profile.get("username"):
+                        user_name = fresh_profile["username"]
+                        total_points = fresh_profile["totalPoints"]
+                        print(f"[Sync] Profile refreshed: {user_name}, Total: {total_points} XP")
+                finally:
+                    disconnect_wifi(log_cb=render_sync_console)
     except Exception as e:
-        print("[Sync] Errore rete:", e)
+        print("[Sync] Network error:", e)
 
     if not synced:
-        save_pending_sync(score, crop["id"])
+        save_pending_sync(score, picked_crop["id"])
         if render_sync_console:
             render_sync_console("SAVED OFFLINE")
         time.sleep_ms(1000)
@@ -502,7 +532,7 @@ def complete_session():
     render_ui()
 
 # ==============================================================================
-# 7. BOOTSTRAP INIZIALE
+# 8. BOOTSTRAP INITIALIZATION
 # ==============================================================================
 render_ui()
 
@@ -511,8 +541,7 @@ offline_accumulated = sum(item.get("score", 0) for item in local_pending)
 
 try:
     profile = initial_sync(USER_ID, log_cb=render_sync_console)
-    print("[Boot] Risultato initial_sync:", profile)
-    
+    print("[Boot] initial_sync result:", profile)
     if profile and isinstance(profile, dict) and profile.get("username"):
         user_name = profile["username"]
         total_points = profile["totalPoints"]
@@ -520,7 +549,7 @@ try:
         user_name = "Offline"
         total_points = offline_accumulated
 except Exception as err:
-    print("[Boot] Sync profilazione fallita:", err)
+    print("[Boot] Sync failed:", err)
     user_name = "Offline"
     total_points = offline_accumulated
 
@@ -529,14 +558,14 @@ display_on()
 render_ui()
 
 # ==============================================================================
-# 8. MAIN LOOP
+# 9. MAIN LOOP
 # ==============================================================================
 while True:
     M5.update()
     now = time.ticks_ms()
     acc_sample = read_accel()
 
-    # --- TASTO A (Firma/Inizia o Peek) ---
+    # --- BTN A (Confirm / Start / Peek) ---
     if BtnA.wasPressed():
         last_activity_ms = now
         if current_state in (STATE_IDLE, STATE_INTERRUPTED):
@@ -551,11 +580,11 @@ while True:
                 display_on()
                 render_ui()
 
-    # --- TASTO B (Scelta seme / Annulla contratto / Peek) ---
+    # --- BTN B (Cycle Intent / Cancel / Peek) ---
     if BtnB.wasPressed():
         last_activity_ms = now
         if current_state == STATE_IDLE:
-            selected_crop_idx = (selected_crop_idx + 1) % len(CROPS)
+            selected_seed_idx = (selected_seed_idx + 1) % len(SEEDS_CATALOG)
             display_on()
             render_ui()
         elif current_state == STATE_REVIEW:
@@ -568,20 +597,18 @@ while True:
                 display_on()
                 render_ui()
 
-    # --- STATO FOCUS (COLTIVAZIONE ATTIVA) ---
+    # --- FOCUS ACTIVE STATE ---
     if current_state == STATE_FOCUS:
         if detector.update(acc_sample):
             interrupt_session()
             continue
 
-        target_sec = CROPS[selected_crop_idx]["target_sec"]
+        target_sec = SEEDS_CATALOG[selected_seed_idx]["target_sec"]
 
-        # LED Heartbeat verde ogni 4s
         if time.ticks_diff(now, last_heartbeat_ms) >= 4000:
             last_heartbeat_ms = now
             led_blink(15)
 
-        # Tick di avanzamento al secondo
         if time.ticks_diff(now, last_ui_tick) >= 1000:
             last_ui_tick = now
             focus_seconds += 1
@@ -593,13 +620,12 @@ while True:
             if is_display_on:
                 render_ui()
 
-        # Timeout spegnimento display
         if is_display_on:
             is_peeking = time.ticks_diff(peek_until_ms, now) > 0
             if not is_peeking and time.ticks_diff(now, last_activity_ms) > SCREEN_TIMEOUT_MS:
                 display_off()
 
-    # --- STATO IDLE & REVIEW ---
+    # --- IDLE & REVIEW STATE ---
     elif current_state in (STATE_IDLE, STATE_REVIEW):
         dx = acc_sample[0] - detector.gravity[0]
         dy = acc_sample[1] - detector.gravity[1]
