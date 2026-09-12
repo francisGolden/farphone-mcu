@@ -4,7 +4,7 @@ import os
 STORAGE_FILE = "pending_sync.json"
 
 def get_pending_syncs():
-    """Restituisce la lista di sessioni salvate in attesa di sync."""
+    """Retrievs the list of saved sessions waiting for sync."""
     try:
         with open(STORAGE_FILE, "r") as f:
             data = json.load(f)
@@ -15,7 +15,7 @@ def get_pending_syncs():
     return []
 
 def save_pending_sync(score, plant_identifier, seed_identifier):
-    """Accoda un raccolto non inviato nel file locale."""
+    """Queues a not synced harvest in the local file."""
     pending = get_pending_syncs()
     pending.append({
         "score": score,
@@ -25,14 +25,14 @@ def save_pending_sync(score, plant_identifier, seed_identifier):
     try:
         with open(STORAGE_FILE, "w") as f:
             json.dump(pending, f)
-        print(f"[Storage] Salvato offline: +{score} XP, {plant_identifier} (Totali in coda: {len(pending)})")
+        print(f"[Storage] Saved offline: +{score} XP, {plant_identifier} (In queue: {len(pending)})")
         return True
     except Exception as e:
-        print("[Storage] Errore salvataggio offline:", e)
+        print("[Storage] Error trying to save offline:", e)
         return False
 
 def clear_pending_syncs():
-    """Rimuove o svuota la coda dopo il sync completato."""
+    """Removes or empties the queue after complete sync."""
     try:
         with open(STORAGE_FILE, "w") as f:
             json.dump([], f)
