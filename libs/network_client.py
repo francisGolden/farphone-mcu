@@ -150,7 +150,7 @@ def initial_sync(user_id, log_cb=None):
                     score = item.get("score") or item.get("xpEarned", 0)
                     plant = item.get("plantType") or item.get("plantIdentifier")
                     seed = item.get("seedIdentifier") or item.get("seed_id")
-                    ok = send_update_raw(user_id, score, plant, seed)
+                    ok = send_update_raw(user_id, score, seed, plant)
                     if not ok:
                         remaining.append(item)
                 except Exception as ex:
