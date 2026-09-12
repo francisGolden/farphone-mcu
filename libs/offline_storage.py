@@ -14,17 +14,18 @@ def get_pending_syncs():
         pass
     return []
 
-def save_pending_sync(score, plant_type):
+def save_pending_sync(score, plant_identifier, seed_identifier):
     """Accoda un raccolto non inviato nel file locale."""
     pending = get_pending_syncs()
     pending.append({
         "score": score,
-        "plantType": plant_type
+        "plantIdentifier": plant_identifier,
+        "seedIdentifier": seed_identifier
     })
     try:
         with open(STORAGE_FILE, "w") as f:
             json.dump(pending, f)
-        print(f"[Storage] Salvato offline: +{score} XP, {plant_type} (Totali in coda: {len(pending)})")
+        print(f"[Storage] Salvato offline: +{score} XP, {plant_identifier} (Totali in coda: {len(pending)})")
         return True
     except Exception as e:
         print("[Storage] Errore salvataggio offline:", e)
