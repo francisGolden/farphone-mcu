@@ -46,7 +46,7 @@ def _parse_url():
     return host, port
 
 def _raw_tcp_request(method, path, payload=None, timeout=6.0):
-    """Esegue una chiamata HTTP/1.0 pura via TCP Socket."""
+    """Pure TCP socket HTTP/1.0 call."""
     host, port = _parse_url()
     addr = socket.getaddrinfo(host, port)[0][-1]
     s = socket.socket()
@@ -85,7 +85,7 @@ def _raw_tcp_request(method, path, payload=None, timeout=6.0):
     return status_line, body
 
 def fetch_user_raw(user_id):
-    """Recupera profilo senza gestire il Wi-Fi (presuppone Wi-Fi già connesso)."""
+    """Fetches user profile without managing Wi-Fi state."""
     status, body = _raw_tcp_request("GET", f"/api/user?id={user_id}")
     print(f"[HTTP GET /api/user] Status: {status} | Body: {body}")
     if "200" not in status:
@@ -97,76 +97,83 @@ def fetch_user_raw(user_id):
         return {"username": str(uname), "totalPoints": int(pts)}
     return None
 
-def send_update_raw(user_id, score, plant_type):
-    """Invia punti senza gestire il Wi-Fi (presuppone Wi-Fi già connesso)."""
+def send_update_raw(user_id, xp_earned, plant_identifier, seed_identifier):
+    """Pushes harvest log without managing Wi-Fi state."""
     payload = {
-        "id": user_id,
-        "scoreToAdd": score,
-        "plantType": plant_type
+        "userId": user_id,
+        "xpEarned": xp_earned,
+        "plantIdentifier": plant_identifier,
+        "seedIdentifier": seed_identifier
     }
-    status, body = _raw_tcp_request("POST", "/api/user/update", payload=payload)
-    print(f"[HTTP POST /api/user/update] Status: {status} | Body: {body}")
+    status, body = _raw_tcp_request("POST", "/api/harvest", payload=payload)
+    print(f"[HTTP POST /api/harvest] Status: {status} | Body: {body}")
     return "200" in status
 
-# Chiamata isolata utilizzata da complete_session durante il gioco
-def update_user_points(user_id, score_to_add, plant_type=None, log_cb=None):
+# Synchronizes harvest and immediately retrieves fresh profile in a single Wi-Fi session
+def update_user_points(user_id, xp_earned, plant_identifier=None, seed_identifier=None, log_cb=None):
     if not connect_wifi(log_cb=log_cb):
-        return False
+        return None  # Return None on connection failure
     try:
-        return send_update_raw(user_id, score_to_add, plant_type)
+        ok = send_update_raw(user_id, xp_earned, plant_identifier, seed_identifier)
+        if ok:
+            if log_cb:
+                log_cb("SYNC PROFILE...")
+            # Retrieve fresh profile right away while Wi-Fi is hot
+            fresh_profile = fetch_user_raw(user_id)
+            return fresh_profile if fresh_profile else True
+        return False
     except Exception as e:
         print("[Update API] Err:", e)
         return False
     finally:
         disconnect_wifi(log_cb=log_cb)
 
-# FUNZIONE UNIFICATA DI BOOTSTRAP: Flush code offline + Get profilo in un colpo solo
 def initial_sync(user_id, log_cb=None):
     """
-    1. Si connette una sola volta al Wi-Fi
-    2. Svuota la coda offline inviando le sessioni arretrate
-    3. Recupera il profilo aggiornato
-    4. Disconnette il Wi-Fi
+    1. Connects to Wi-Fi once
+    2. Flushes offline queue
+    3. Fetches fresh profile
+    4. Disconnects Wi-Fi
     """
     if not connect_wifi(log_cb=log_cb):
         return None
 
     try:
-        # 1. Flush della memoria flash
         pending = get_pending_syncs()
         if pending:
-            print(f"[Init Sync] Trovati {len(pending)} raccolti offline da inviare...")
+            print(f"[Init Sync] Flushing {len(pending)} offline records...")
             if log_cb:
                 log_cb(f"SYNC OFFLINE ({len(pending)})...")
             remaining = []
             for item in pending:
                 try:
-                    ok = send_update_raw(user_id, item["score"], item["plantType"])
+                    score = item.get("score") or item.get("xpEarned", 0)
+                    plant = item.get("plantType") or item.get("plantIdentifier")
+                    seed = item.get("seedIdentifier") or item.get("seed_id")
+                    ok = send_update_raw(user_id, score, plant, seed)
                     if not ok:
                         remaining.append(item)
                 except Exception as ex:
-                    print("[Init Sync] Err singolo invio:", ex)
+                    print("[Init Sync] Send record error:", ex)
                     remaining.append(item)
             
             if not remaining:
                 clear_pending_syncs()
-                print("[Init Sync] Coda offline interamente svuotata!")
+                print("[Init Sync] Offline queue completely emptied!")
             else:
-                # Sovrascrive mantenendo solo quelli falliti
                 try:
                     with open("pending_sync.json", "w") as f:
                         json.dump(remaining, f)
                 except Exception:
                     pass
 
-        # 2. Lettura del profilo fresco dal backend
         if log_cb:
             log_cb("FETCHING PROFILE...")
         profile = fetch_user_raw(user_id)
         return profile
 
     except Exception as exc:
-        print("[Init Sync] Errore generale:", exc)
+        print("[Init Sync] General error:", exc)
         return None
     finally:
         disconnect_wifi(log_cb=log_cb)
