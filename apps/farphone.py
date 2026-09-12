@@ -517,32 +517,29 @@ def complete_session():
     # Optimistic local UI credit
     total_points += score
 
-    # 4. HTTP Synchronisation with In-flight Profile Refresh
+    # 4. HTTP Synchronisation with Single-Flight Profile Refresh
     synced = False
     try:
-        synced = update_user_points(
+        # update_user_points sends the harvest and recovers the user profile in the same Wi-Fi session
+        fresh_profile = update_user_points(
             USER_ID, 
-            score,  
-            plant_identifier=picked_crop["id"],
-            seed_identifier=seed["id"],
+            score, 
+            seed_identifier=seed["id"], 
+            plant_identifier=picked_crop["id"], 
             log_cb=render_sync_console
         )
-        if synced:
-            # Sync user profile immediately after successful harvest
-            if connect_wifi(log_cb=render_sync_console):
-                try:
-                    fresh_profile = fetch_user_raw(USER_ID)
-                    if fresh_profile and fresh_profile.get("username"):
-                        user_name = fresh_profile["username"]
-                        total_points = fresh_profile["totalPoints"]
-                        print(f"[Sync] Profile refreshed: {user_name}, Total: {total_points} XP")
-                finally:
-                    disconnect_wifi(log_cb=render_sync_console)
+        if fresh_profile and isinstance(fresh_profile, dict):
+            synced = True
+            user_name = fresh_profile.get("username", user_name)
+            total_points = fresh_profile.get("totalPoints", total_points)
+            print(f"[Sync] Profile refreshed: {user_name}, Total: {total_points} XP")
+        elif fresh_profile is True:
+            synced = True
     except Exception as e:
         print("[Sync] Network error:", e)
 
     if not synced:
-        save_pending_sync(score, picked_crop["id"], seed["id"])
+        save_pending_sync(score, seed["id"], picked_crop["id"])
         if render_sync_console:
             render_sync_console("SAVED OFFLINE")
         time.sleep_ms(1000)
