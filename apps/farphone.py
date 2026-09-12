@@ -81,8 +81,8 @@ def play_wav(path, volume=240):
 # Rarity tiers: COM (60%), RAR (30%), LEG (10%)
 SEEDS_CATALOG = [
     {
-        "id": "SEED_STUDY",
-        "name": "Study",
+        "id": "SEED_LEARNING",
+        "name": "Learning",
         "target_sec": 45 * 60,
         "bonus_base": 600,
         "accent_color": 0x44AAFF,
@@ -94,8 +94,8 @@ SEEDS_CATALOG = [
         ]
     },
     {
-        "id": "SEED_WORK",
-        "name": "Work",
+        "id": "SEED_LABOUR",
+        "name": "Labour",
         "target_sec": 30 * 60,
         "bonus_base": 500,
         "accent_color": 0xFFA500,
@@ -107,8 +107,8 @@ SEEDS_CATALOG = [
         ]
     },
     {
-        "id": "SEED_NIGHT",
-        "name": "Night",
+        "id": "SEED_REST",
+        "name": "Rest",
         "target_sec": 60 * 60,
         "bonus_base": 1200,
         "accent_color": 0x9955FF,
@@ -120,8 +120,8 @@ SEEDS_CATALOG = [
         ]
     },
     {
-        "id": "SEED_PRAYER",
-        "name": "Prayer",
+        "id": "SEED_ATTUNEMENT",
+        "name": "Attunement",
         "target_sec": 20 * 60,
         "bonus_base": 350,
         "accent_color": 0xFFDD44,
@@ -132,8 +132,8 @@ SEEDS_CATALOG = [
         ]
     },
     {
-        "id": "SEED_DIGEST",
-        "name": "Digest",
+        "id": "SEED_NOURISHMENT",
+        "name": "Nourishment",
         "target_sec": 15 * 60,
         "bonus_base": 250,
         "accent_color": 0x5CD632,
@@ -145,8 +145,8 @@ SEEDS_CATALOG = [
         ]
     },
     {
-        "id": "SEED_PLAY",
-        "name": "Play",
+        "id": "SEED_RECREATION",
+        "name": "Recreation",
         "target_sec": 60,  # 1 min test sprint
         "bonus_base": 100,
         "accent_color": 0xFF44AA,
@@ -155,6 +155,19 @@ SEEDS_CATALOG = [
             {"id": "DANDELION",  "name": "Dandelion",    "rarity": "COM", "xp_mul": 1.0},
             {"id": "RED_SHROOM", "name": "Red Mushroom", "rarity": "RAR", "xp_mul": 1.5},
             {"id": "LUCKY_4",    "name": "Four-Leaf",    "rarity": "LEG", "xp_mul": 3.0}
+        ]
+    },
+        {
+        "id": "SEED_COVENANT",
+        "name": "Covenant",
+        "target_sec": 60 * 60,
+        "bonus_base": 1500,
+        "accent_color": 0xFF44AA,
+        "pool": [
+            {"id": "GRAPEVINE", "name": "Grapevine", "rarity": "COM", "xp_mul": 1.0},
+            {"id": "ACACIA",  "name": "Acacia", "rarity": "COM", "xp_mul": 1.0},
+            {"id": "MYRTLE", "name": "Myrtle", "rarity": "RAR", "xp_mul": 1.5},
+            {"id": "IVY",    "name": "Ivy", "rarity": "LEG", "xp_mul": 3.0}
         ]
     }
 ]
@@ -507,7 +520,13 @@ def complete_session():
     # 4. HTTP Synchronisation with In-flight Profile Refresh
     synced = False
     try:
-        synced = update_user_points(USER_ID, score, plant_type=picked_crop["id"], log_cb=render_sync_console)
+        synced = update_user_points(
+            USER_ID, 
+            score,  
+            plant_identifier=picked_crop["id"],
+            seed_identifier=seed["id"],
+            log_cb=render_sync_console
+        )
         if synced:
             # Sync user profile immediately after successful harvest
             if connect_wifi(log_cb=render_sync_console):
@@ -523,7 +542,7 @@ def complete_session():
         print("[Sync] Network error:", e)
 
     if not synced:
-        save_pending_sync(score, picked_crop["id"])
+        save_pending_sync(score, picked_crop["id"], seed["id"])
         if render_sync_console:
             render_sync_console("SAVED OFFLINE")
         time.sleep_ms(1000)
