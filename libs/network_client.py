@@ -46,7 +46,7 @@ def _parse_url():
     return host, port
 
 def _raw_tcp_request(method, path, payload=None, timeout=6.0):
-    """Pure TCP socket HTTP/1.0 call."""
+    """Executes a pure TCP socket HTTP/1.0 request."""
     host, port = _parse_url()
     addr = socket.getaddrinfo(host, port)[0][-1]
     s = socket.socket()
@@ -61,7 +61,7 @@ def _raw_tcp_request(method, path, payload=None, timeout=6.0):
     ]
     
     body_bytes = b""
-    if payload:
+    if payload is not None:
         body_bytes = json.dumps(payload).encode("utf-8")
         headers.append("Content-Type: application/json")
         headers.append(f"Content-Length: {len(body_bytes)}")
@@ -85,7 +85,7 @@ def _raw_tcp_request(method, path, payload=None, timeout=6.0):
     return status_line, body
 
 def fetch_user_raw(user_id):
-    """Fetches user profile without managing Wi-Fi state."""
+    """Fetches user profile (assumes Wi-Fi is already connected)."""
     status, body = _raw_tcp_request("GET", f"/api/user?id={user_id}")
     print(f"[HTTP GET /api/user] Status: {status} | Body: {body}")
     if "200" not in status:
@@ -97,44 +97,44 @@ def fetch_user_raw(user_id):
         return {"username": str(uname), "totalPoints": int(pts)}
     return None
 
-def send_update_raw(user_id, xp_earned, plant_identifier, seed_identifier):
-    """Pushes harvest log without managing Wi-Fi state."""
+def send_harvest_raw(user_id, seed_identifier, plant_identifier, xp_earned, outcome, duration_seconds):
+    """Sends harvest/session event over an established connection."""
     payload = {
         "userId": user_id,
-        "xpEarned": xp_earned,
+        "seedIdentifier": seed_identifier,
         "plantIdentifier": plant_identifier,
-        "seedIdentifier": seed_identifier
+        "xpEarned": xp_earned,
+        "harvestOutcome": outcome,
+        "durationSeconds": duration_seconds
     }
     status, body = _raw_tcp_request("POST", "/api/harvest", payload=payload)
     print(f"[HTTP POST /api/harvest] Status: {status} | Body: {body}")
     return "200" in status
 
-# Synchronizes harvest and immediately retrieves fresh profile in a single Wi-Fi session
-def update_user_points(user_id, xp_earned, plant_identifier=None, seed_identifier=None, log_cb=None):
+def sync_session_event(user_id, seed_identifier, plant_identifier, xp_earned, outcome, duration_seconds, log_cb=None):
+    """
+    Connects to Wi-Fi, delivers session outcome telemetry (SUCCESSFUL or FAILED),
+    refreshes user profile on SUCCESSFUL completions, and cleanly tears down Wi-Fi.
+    """
     if not connect_wifi(log_cb=log_cb):
-        return None  # Return None on connection failure
+        return None
+
     try:
-        ok = send_update_raw(user_id, xp_earned, plant_identifier, seed_identifier)
-        if ok:
+        ok = send_harvest_raw(user_id, seed_identifier, plant_identifier, xp_earned, outcome, duration_seconds)
+        if ok and outcome == "SUCCESSFUL":
             if log_cb:
                 log_cb("SYNC PROFILE...")
-            # Retrieve fresh profile right away while Wi-Fi is hot
-            fresh_profile = fetch_user_raw(user_id)
-            return fresh_profile if fresh_profile else True
-        return False
+            profile = fetch_user_raw(user_id)
+            return profile if profile else True
+        return ok
     except Exception as e:
-        print("[Update API] Err:", e)
+        print("[Session API] Err:", e)
         return False
     finally:
         disconnect_wifi(log_cb=log_cb)
 
 def initial_sync(user_id, log_cb=None):
-    """
-    1. Connects to Wi-Fi once
-    2. Flushes offline queue
-    3. Fetches fresh profile
-    4. Disconnects Wi-Fi
-    """
+    """Flushes offline logs and retrieves fresh user profile at boot."""
     if not connect_wifi(log_cb=log_cb):
         return None
 
@@ -147,19 +147,22 @@ def initial_sync(user_id, log_cb=None):
             remaining = []
             for item in pending:
                 try:
-                    score = item.get("score") or item.get("xpEarned", 0)
-                    plant = item.get("plantType") or item.get("plantIdentifier")
-                    seed = item.get("seedIdentifier") or item.get("seed_id")
-                    ok = send_update_raw(user_id, score, seed, plant)
+                    seed = item.get("seedIdentifier")
+                    plant = item.get("plantIdentifier")
+                    score = item.get("xpEarned", 0)
+                    outcome = item.get("outcome", "SUCCESSFUL")
+                    duration = item.get("durationSeconds", 0)
+
+                    ok = send_harvest_raw(user_id, seed, plant, score, outcome, duration)
                     if not ok:
                         remaining.append(item)
                 except Exception as ex:
-                    print("[Init Sync] Send record error:", ex)
+                    print("[Init Sync] Err sending item:", ex)
                     remaining.append(item)
-            
+
             if not remaining:
                 clear_pending_syncs()
-                print("[Init Sync] Offline queue completely emptied!")
+                print("[Init Sync] Offline queue emptied successfully.")
             else:
                 try:
                     with open("pending_sync.json", "w") as f:
@@ -169,8 +172,7 @@ def initial_sync(user_id, log_cb=None):
 
         if log_cb:
             log_cb("FETCHING PROFILE...")
-        profile = fetch_user_raw(user_id)
-        return profile
+        return fetch_user_raw(user_id)
 
     except Exception as exc:
         print("[Init Sync] General error:", exc)

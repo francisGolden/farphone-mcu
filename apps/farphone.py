@@ -5,7 +5,7 @@ import machine
 from machine import Pin
 import M5
 from M5 import BtnA, BtnB, Imu, Lcd, Power, Speaker
-from libs.network_client import update_user_points, initial_sync, fetch_user_raw, connect_wifi, disconnect_wifi
+from libs.network_client import sync_session_event, initial_sync
 from libs.motion_detector import SmartMotionDetector
 from libs.offline_storage import save_pending_sync, get_pending_syncs
 
@@ -126,9 +126,9 @@ SEEDS_CATALOG = [
         "bonus_base": 350,
         "accent_color": 0xFFDD44,
         "pool": [
-            {"id": "MYRTLE", "name": "Myrtle",      "rarity": "COM", "xp_mul": 1.0},
-            {"id": "OLIVE",  "name": "Olive Branch","rarity": "RAR", "xp_mul": 1.5},
-            {"id": "BODHI",  "name": "Bodhi Leaf",  "rarity": "LEG", "xp_mul": 3.0}
+            {"id": "MYRTLE", "name": "Myrtle",       "rarity": "COM", "xp_mul": 1.0},
+            {"id": "OLIVE",  "name": "Olive Branch", "rarity": "RAR", "xp_mul": 1.5},
+            {"id": "BODHI",  "name": "Bodhi Leaf",   "rarity": "LEG", "xp_mul": 3.0}
         ]
     },
     {
@@ -157,7 +157,7 @@ SEEDS_CATALOG = [
             {"id": "LUCKY_4",    "name": "Four-Leaf",    "rarity": "LEG", "xp_mul": 3.0}
         ]
     },
-        {
+    {
         "id": "SEED_COVENANT",
         "name": "Covenant",
         "target_sec": 60 * 60,
@@ -165,9 +165,9 @@ SEEDS_CATALOG = [
         "accent_color": 0xFF44AA,
         "pool": [
             {"id": "GRAPEVINE", "name": "Grapevine", "rarity": "COM", "xp_mul": 1.0},
-            {"id": "ACACIA",  "name": "Acacia", "rarity": "COM", "xp_mul": 1.0},
-            {"id": "MYRTLE", "name": "Myrtle", "rarity": "RAR", "xp_mul": 1.5},
-            {"id": "IVY",    "name": "Ivy", "rarity": "LEG", "xp_mul": 3.0}
+            {"id": "ACACIA",    "name": "Acacia",    "rarity": "COM", "xp_mul": 1.0},
+            {"id": "MYRTLE",    "name": "Myrtle",    "rarity": "RAR", "xp_mul": 1.5},
+            {"id": "IVY",       "name": "Ivy",       "rarity": "LEG", "xp_mul": 3.0}
         ]
     }
 ]
@@ -278,22 +278,27 @@ def read_accel():
 # ==============================================================================
 # 6. UI RENDERER
 # ==============================================================================
-def trigger_breach_alert():
+def trigger_breach_alert(held_seconds=0):
     display_on()
     Lcd.clear(0x000000)
-    draw_withered_crop(67, 75)
+    draw_withered_crop(67, 65)
 
     Lcd.setFont(M5.Lcd.FONTS.DejaVu18)
     Lcd.setTextColor(0xFF2222, 0x000000)
-    Lcd.setCursor(8, 138)
+    Lcd.setCursor(8, 126)
     Lcd.print("CROP WITHERED")
 
     Lcd.setFont(M5.Lcd.FONTS.DejaVu12)
     Lcd.setTextColor(0xAAAAAA, 0x000000)
-    Lcd.setCursor(10, 168)
+    Lcd.setCursor(10, 154)
     Lcd.print("Contract Breached!")
+
+    Lcd.setTextColor(0xFFFFFF, 0x000000)
+    Lcd.setCursor(10, 174)
+    Lcd.print(f"Held for: {held_seconds}s")
+
     Lcd.setTextColor(0xFF6666, 0x000000)
-    Lcd.setCursor(18, 194)
+    Lcd.setCursor(10, 196)
     Lcd.print("Seed Lost: 0 XP")
 
     play_wav("res/audio/whistle.wav")
@@ -454,11 +459,42 @@ def start_session():
     render_ui()
 
 def interrupt_session():
-    global current_state, last_activity_ms, score, total_points
+    """Handles motion breach, triggers alarm, and records FAILED session telemetry."""
+    global current_state, last_activity_ms, score
     current_state = STATE_INTERRUPTED
     score = 0
 
-    trigger_breach_alert()
+    elapsed_sec = max(0, time.ticks_diff(time.ticks_ms(), session_start_ms) // 1000)
+    seed = SEEDS_CATALOG[selected_seed_idx]
+
+    trigger_breach_alert(held_seconds=elapsed_sec)
+
+    # Telemetry dispatch: 0 XP, plantIdentifier is None, outcome is FAILED
+    synced = False
+    try:
+        synced = sync_session_event(
+            USER_ID,
+            seed_identifier=seed["id"],
+            plant_identifier=None,
+            xp_earned=0,
+            outcome="FAILED",
+            duration_seconds=elapsed_sec,
+            log_cb=render_sync_console
+        )
+    except Exception as e:
+        print("[Breach Sync] Error:", e)
+
+    if not synced:
+        save_pending_sync(
+            score=0,
+            seed_id=seed["id"],
+            plant_id=None,
+            outcome="FAILED",
+            duration_sec=elapsed_sec
+        )
+        if render_sync_console:
+            render_sync_console("SAVED OFFLINE")
+        time.sleep_ms(1000)
 
     current_state = STATE_IDLE
     last_activity_ms = time.ticks_ms()
@@ -466,11 +502,13 @@ def interrupt_session():
     render_ui()
 
 def complete_session():
+    """Handles successful completion, rolls random crop, grants XP, and syncs profile."""
     global current_state, last_activity_ms, score, total_points, user_name
     current_state = STATE_IDLE
     display_on()
 
     seed = SEEDS_CATALOG[selected_seed_idx]
+    duration_sec = seed["target_sec"]
 
     # 1. Loot Table extraction
     picked_crop = roll_random_crop(seed)
@@ -517,15 +555,16 @@ def complete_session():
     # Optimistic local UI credit
     total_points += score
 
-    # 4. HTTP Synchronisation with Single-Flight Profile Refresh
+    # 4. HTTP Telemetry with In-Flight Profile Refresh
     synced = False
     try:
-        # update_user_points sends the harvest and recovers the user profile in the same Wi-Fi session
-        fresh_profile = update_user_points(
-            USER_ID, 
-            score, 
-            seed_identifier=seed["id"], 
-            plant_identifier=picked_crop["id"], 
+        fresh_profile = sync_session_event(
+            USER_ID,
+            seed_identifier=seed["id"],
+            plant_identifier=picked_crop["id"],
+            xp_earned=score,
+            outcome="SUCCESSFUL",
+            duration_seconds=duration_sec,
             log_cb=render_sync_console
         )
         if fresh_profile and isinstance(fresh_profile, dict):
@@ -539,9 +578,10 @@ def complete_session():
         print("[Sync] Network error:", e)
 
     if not synced:
-        save_pending_sync(score, seed["id"], picked_crop["id"])
-        if render_sync_console:
+        if save_pending_sync(score, seed["id"], picked_crop["id"], outcome="SUCCESSFUL", duration_sec=duration_sec):
             render_sync_console("SAVED OFFLINE")
+        else:
+            render_sync_console("STORAGE ERROR")
         time.sleep_ms(1000)
 
     last_activity_ms = time.ticks_ms()

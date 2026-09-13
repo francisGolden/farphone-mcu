@@ -13,22 +13,23 @@ def get_pending_syncs():
     except Exception:
         pass
     return []
-
-def save_pending_sync(score, plant_identifier, seed_identifier):
-    """Queues a not synced harvest in the local file."""
-    pending = get_pending_syncs()
-    pending.append({
-        "score": score,
-        "plantIdentifier": plant_identifier,
-        "seedIdentifier": seed_identifier
+    
+def save_pending_sync(score, seed_id, plant_id=None, outcome="SUCCESSFUL", duration_sec=0):
+    items = get_pending_syncs()
+    items.append({
+        "xpEarned": score,
+        "seedIdentifier": seed_id,
+        "plantIdentifier": plant_id,
+        "outcome": outcome,
+        "durationSeconds": duration_sec
     })
     try:
         with open(STORAGE_FILE, "w") as f:
-            json.dump(pending, f)
-        print(f"[Storage] Saved offline: +{score} XP, {plant_identifier} (In queue: {len(pending)})")
+            json.dump(items, f)
+        print(f"[Storage] Saved offline: {outcome} ({score} XP, {duration_sec}s)")
         return True
     except Exception as e:
-        print("[Storage] Error trying to save offline:", e)
+        print("[Storage] Error saving offline record:", e)
         return False
 
 def clear_pending_syncs():
