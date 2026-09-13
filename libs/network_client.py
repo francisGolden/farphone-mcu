@@ -97,21 +97,23 @@ def fetch_user_raw(user_id):
         return {"username": str(uname), "totalPoints": int(pts)}
     return None
 
-def send_harvest_raw(user_id, seed_identifier, plant_identifier, xp_earned, outcome, duration_seconds):
+def send_harvest_raw(user_id, seed_identifier, plant_identifier, xp_earned, harvestOutcome, duration_seconds, peek_count, first_peek_sec):
     """Sends harvest/session event over an established connection."""
     payload = {
         "userId": user_id,
         "seedIdentifier": seed_identifier,
         "plantIdentifier": plant_identifier,
         "xpEarned": xp_earned,
-        "harvestOutcome": outcome,
-        "durationSeconds": duration_seconds
+        "harvestOutcome": harvestOutcome,
+        "durationSeconds": duration_seconds,
+        "peekCount": peek_count,
+        "firstPeekSec": first_peek_sec
     }
     status, body = _raw_tcp_request("POST", "/api/harvest", payload=payload)
     print(f"[HTTP POST /api/harvest] Status: {status} | Body: {body}")
     return "200" in status
 
-def sync_session_event(user_id, seed_identifier, plant_identifier, xp_earned, outcome, duration_seconds, log_cb=None):
+def sync_session_event(user_id, seed_identifier, plant_identifier, xp_earned, harvestOutcome, duration_seconds, peek_count=0, first_peek_sec=None,log_cb=None):
     """
     Connects to Wi-Fi, delivers session outcome telemetry (SUCCESSFUL or FAILED),
     refreshes user profile on SUCCESSFUL completions, and cleanly tears down Wi-Fi.
@@ -120,8 +122,8 @@ def sync_session_event(user_id, seed_identifier, plant_identifier, xp_earned, ou
         return None
 
     try:
-        ok = send_harvest_raw(user_id, seed_identifier, plant_identifier, xp_earned, outcome, duration_seconds)
-        if ok and outcome == "SUCCESSFUL":
+        ok = send_harvest_raw(user_id, seed_identifier, plant_identifier, xp_earned, harvestOutcome, duration_seconds, peek_count, first_peek_sec)
+        if ok and harvestOutcome == "SUCCESSFUL":
             if log_cb:
                 log_cb("SYNC PROFILE...")
             profile = fetch_user_raw(user_id)
@@ -150,10 +152,12 @@ def initial_sync(user_id, log_cb=None):
                     seed = item.get("seedIdentifier")
                     plant = item.get("plantIdentifier")
                     score = item.get("xpEarned", 0)
-                    outcome = item.get("outcome", "SUCCESSFUL")
+                    harvestOutcome = item.get("harvestOutcome", "SUCCESSFUL")
                     duration = item.get("durationSeconds", 0)
+                    peeks = item.get("peekCount", 0)
+                    first_p = item.get("firstPeekSec")
 
-                    ok = send_harvest_raw(user_id, seed, plant, score, outcome, duration)
+                    ok = send_harvest_raw(user_id, seed, plant, score, harvestOutcome, duration, peeks, first_p)
                     if not ok:
                         remaining.append(item)
                 except Exception as ex:
