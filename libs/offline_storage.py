@@ -14,14 +14,16 @@ def get_pending_syncs():
         pass
     return []
     
-def save_pending_sync(score, seed_id, plant_id=None, harvestOutcome="SUCCESSFUL", duration_sec=0):
+def save_pending_sync(score, seed_id, plant_id=None, harvestOutcome="SUCCESSFUL", duration_sec=0, peek_count=0, first_peek_sec=None):
     items = get_pending_syncs()
     items.append({
         "xpEarned": score,
         "seedIdentifier": seed_id,
         "plantIdentifier": plant_id,
         "harvestOutcome": harvestOutcome,
-        "durationSeconds": duration_sec
+        "durationSeconds": duration_sec,
+        "peekCount": peek_count,
+        "firstPeekSec": first_peek_sec
     })
     try:
         with open(STORAGE_FILE, "w") as f:
