@@ -14,19 +14,19 @@ def get_pending_syncs():
         pass
     return []
     
-def save_pending_sync(score, seed_id, plant_id=None, outcome="SUCCESSFUL", duration_sec=0):
+def save_pending_sync(score, seed_id, plant_id=None, harvestOutcome="SUCCESSFUL", duration_sec=0):
     items = get_pending_syncs()
     items.append({
         "xpEarned": score,
         "seedIdentifier": seed_id,
         "plantIdentifier": plant_id,
-        "outcome": outcome,
+        "harvestOutcome": harvestOutcome,
         "durationSeconds": duration_sec
     })
     try:
         with open(STORAGE_FILE, "w") as f:
             json.dump(items, f)
-        print(f"[Storage] Saved offline: {outcome} ({score} XP, {duration_sec}s)")
+        print(f"[Storage] Saved offline: {harvestOutcome} ({score} XP, {duration_sec}s)")
         return True
     except Exception as e:
         print("[Storage] Error saving offline record:", e)
