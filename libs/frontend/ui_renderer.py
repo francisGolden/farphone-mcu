@@ -11,12 +11,15 @@ from libs.frontend.pixel_art_engine import (
 from libs.utils.get_battery_percentage import get_battery_percentage
 
 class UiRenderer:
-    def __init__(self, play_wav_fn=None, bright_active=80):
+    def __init__(self, play_wav_fn=None, bright_active=80, power_manager=None):
+        self.power_manager = power_manager
         self.play_wav = play_wav_fn
         self.bright_active = bright_active
         self.is_display_on = True
 
     def display_on(self):
+        if self.power_manager:
+            self.power_manager.set_idle(False)
         if not self.is_display_on:
             Lcd.setBrightness(self.bright_active)
             self.is_display_on = True
@@ -25,6 +28,8 @@ class UiRenderer:
         if self.is_display_on:
             Lcd.setBrightness(0)
             self.is_display_on = False
+            if self.power_manager:
+                self.power_manager.set_idle(True)
 
     def trigger_breach_alert(self, held_seconds=0):
         self.display_on()

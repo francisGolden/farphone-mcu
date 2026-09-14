@@ -32,8 +32,10 @@ def disconnect_wifi(log_cb=None):
             wlan.disconnect()
     except Exception:
         pass
+    # Disconnecting alone leaves the station interface powered.
+    wlan.active(False)
     if log_cb:
-        log_cb("WIFI: IDLE")
+        log_cb("WIFI: OFF")
 
 def _parse_url():
     clean_url = config.BACKEND_URL.replace("http://", "").replace("https://", "").rstrip("/")
@@ -118,10 +120,10 @@ def sync_session_event(user_id, seed_identifier, plant_identifier, xp_earned, ha
     Connects to Wi-Fi, delivers session outcome telemetry (SUCCESSFUL or FAILED),
     refreshes user profile on SUCCESSFUL completions, and cleanly tears down Wi-Fi.
     """
-    if not connect_wifi(log_cb=log_cb):
-        return None
-
     try:
+        if not connect_wifi(log_cb=log_cb):
+            return None
+
         ok = send_harvest_raw(user_id, seed_identifier, plant_identifier, xp_earned, harvestOutcome, duration_seconds, peek_count, first_peek_sec)
         if ok and harvestOutcome == "SUCCESSFUL":
             if log_cb:
@@ -137,10 +139,10 @@ def sync_session_event(user_id, seed_identifier, plant_identifier, xp_earned, ha
 
 def initial_sync(user_id, log_cb=None):
     """Flushes offline logs and retrieves fresh user profile at boot."""
-    if not connect_wifi(log_cb=log_cb):
-        return None
-
     try:
+        if not connect_wifi(log_cb=log_cb):
+            return None
+
         pending = get_pending_syncs()
         if pending:
             print(f"[Init Sync] Flushing {len(pending)} offline records...")

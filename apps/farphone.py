@@ -1,6 +1,7 @@
 import math
 import time
 import random
+import config
 from machine import Pin
 import M5
 from M5 import BtnA, BtnB, Imu, Lcd, Speaker
@@ -11,11 +12,20 @@ from libs.constants import STATE_IDLE, STATE_REVIEW, STATE_FOCUS, STATE_INTERRUP
 from res.data.seeds_catalog import SEEDS_CATALOG
 from libs.frontend.ui_renderer import UiRenderer
 from libs.session import SessionManager
+from libs.power_manager import CpuPowerManager
 
 # ==============================================================================
 # 1. HARDWARE & PERIPHERALS
 # ==============================================================================
 M5.begin()
+cpu_power = CpuPowerManager(
+    light_sleep_enabled=getattr(config, "LIGHT_SLEEP_ENABLED", True)
+)
+# M5 initialization may start the audio peripheral before the first sound.
+try:
+    Speaker.end()
+except Exception as exc:
+    print("[Power] Speaker shutdown failed:", exc)
 Lcd.setBrightness(80)
 Lcd.clear(0x000000)
 
@@ -42,9 +52,13 @@ def play_wav(path, volume=240):
         time.sleep_ms(40)
         Speaker.stop()
         time.sleep_ms(20)
-        Speaker.end()
     except Exception as e:
         print(f"[Audio] Error {path}:", e)
+    finally:
+        try:
+            Speaker.end()
+        except Exception as exc:
+            print("[Audio] Speaker shutdown failed:", exc)
 
 def read_accel():
     try:
@@ -84,7 +98,7 @@ def roll_random_crop(seed_data):
     candidates = [p for p in seed_data["pool"] if p["rarity"] == target_rarity]
     return random.choice(candidates) if candidates else random.choice(seed_data["pool"])
 
-ui = UiRenderer(play_wav_fn=play_wav, bright_active=80)
+ui = UiRenderer(play_wav_fn=play_wav, bright_active=80, power_manager=cpu_power)
 
 session = SessionManager(
     user_id=USER_ID,
@@ -132,6 +146,8 @@ except Exception as err:
 
 last_activity_ms = time.ticks_ms()
 last_heartbeat_ms = time.ticks_ms()
+# Separate adaptive reference: focus detection keeps its own orientation baseline.
+idle_gravity = list(read_accel())
 ui.display_on()
 render_current_ui()
 
@@ -153,6 +169,10 @@ while True:
             render_current_ui()
         elif session.current_state == STATE_REVIEW:
             session.start_session(app_state)
+            last_activity_ms = session.last_activity_ms
+            # Calibration/audio are blocking: discard the pre-start sample.
+            now = time.ticks_ms()
+            acc_sample = read_accel()
         elif session.current_state == STATE_FOCUS:
             session.record_peek(now, app_state)
 
@@ -174,6 +194,7 @@ while True:
     if session.current_state == STATE_FOCUS:
         if detector.update(acc_sample):
             session.interrupt_session(app_state)
+            last_activity_ms = session.last_activity_ms
             continue
 
         target_sec = SEEDS_CATALOG[app_state["selected_seed_idx"]]["target_sec"]
@@ -186,10 +207,13 @@ while True:
         # Tick timer 1s
         if time.ticks_diff(now, session.last_ui_tick) >= 1000:
             session.last_ui_tick = now
-            session.focus_seconds += 1
+            session.focus_seconds = max(
+                0, time.ticks_diff(now, session.session_start_ms) // 1000
+            )
 
             if session.focus_seconds >= target_sec:
                 session.complete_session(app_state)
+                last_activity_ms = session.last_activity_ms
                 continue
 
             if ui.is_display_on:
@@ -197,15 +221,22 @@ while True:
 
         # Spegnimento display / timeout peek
         if ui.is_display_on:
-            is_peeking = time.ticks_diff(session.peek_until_ms, now) > 0
-            if not is_peeking and time.ticks_diff(now, last_activity_ms) > SCREEN_TIMEOUT_MS:
+            if session.peek_count > 0:
+                display_expired = time.ticks_diff(now, session.peek_until_ms) >= 0
+            else:
+                display_expired = time.ticks_diff(now, last_activity_ms) > SCREEN_TIMEOUT_MS
+            if display_expired:
                 ui.display_off()
 
     # --- IDLE & REVIEW STATE (Wake-on-tilt) ---
-    elif session.current_state in (STATE_IDLE, STATE_REVIEW):
-        dx = acc_sample[0] - detector.gravity[0]
-        dy = acc_sample[1] - detector.gravity[1]
-        dz = acc_sample[2] - detector.gravity[2]
+    elif session.current_state in (STATE_IDLE, STATE_REVIEW, STATE_INTERRUPTED):
+        dx = acc_sample[0] - idle_gravity[0]
+        dy = acc_sample[1] - idle_gravity[1]
+        dz = acc_sample[2] - idle_gravity[2]
+
+        # Follow the resting orientation so a fixed tilt cannot prevent timeout.
+        for axis in range(3):
+            idle_gravity[axis] = 0.85 * idle_gravity[axis] + 0.15 * acc_sample[axis]
 
         if math.sqrt(dx**2 + dy**2 + dz**2) > 0.35:
             last_activity_ms = now
@@ -216,4 +247,4 @@ while True:
         if ui.is_display_on and time.ticks_diff(now, last_activity_ms) > SCREEN_TIMEOUT_MS:
             ui.display_off()
 
-    time.sleep_ms(40)
+    cpu_power.pause(40, display_off=not ui.is_display_on)
