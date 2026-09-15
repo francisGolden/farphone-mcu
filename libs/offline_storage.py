@@ -1,3 +1,4 @@
+from libs.diagnostic_log import log as print
 import json
 import os
 

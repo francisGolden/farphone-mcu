@@ -1,0 +1,4 @@
+__pycache__/
+*.pyc
+wifi_credentials.json
+wifi_credentials.json.tmp

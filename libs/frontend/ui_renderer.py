@@ -16,6 +16,9 @@ class UiRenderer:
         self.play_wav = play_wav_fn
         self.bright_active = bright_active
         self.is_display_on = True
+        self._wifi_setup_data = None
+        self._wifi_setup_page = 0
+        self._wifi_qr_available = True
 
     def display_on(self):
         if self.power_manager:
@@ -30,6 +33,87 @@ class UiRenderer:
             self.is_display_on = False
             if self.power_manager:
                 self.power_manager.set_idle(True)
+
+    def cycle_wifi_setup(self):
+        if self._wifi_setup_data is not None:
+            self._wifi_setup_page = (self._wifi_setup_page + 1) % 3
+            self.render_wifi_setup(*self._wifi_setup_data)
+
+    def render_wifi_setup(self, ssid, password, address, status):
+        if self._wifi_setup_data is None or self._wifi_setup_data[:3] != (ssid, password, address):
+            self._wifi_setup_page = 0
+        self._wifi_setup_data = (ssid, password, address, status)
+        self.display_on()
+        Lcd.clear(0x000000)
+        Lcd.setFont(M5.Lcd.FONTS.DejaVu12)
+
+        def text(line, y, color=0xFFFFFF):
+            Lcd.setTextColor(color, 0x000000)
+            Lcd.setCursor(3, y)
+            Lcd.print(line)
+
+        if self._wifi_setup_page < 2 and self._wifi_qr_available:
+            # The AP name/key are generated locally. Escape reserved Wi-Fi QR characters.
+            def escape(value):
+                for char in ('\\', ';', ',', '"', ':'):
+                    value = value.replace(char, '\\' + char)
+                return value
+
+            if self._wifi_setup_page == 0:
+                payload = 'WIFI:T:WPA;S:' + escape(ssid) + ';P:' + escape(password) + ';;'
+                title = '1. Collega Wi-Fi'
+            else:
+                payload = 'http://' + address
+                title = '2. Apri il setup'
+            try:
+                # Version 4: 33 modules at 3 pixels each, plus a 4-module quiet zone.
+                Lcd.fillRect(6, 33, 123, 123, 0xFFFFFF)
+                if Lcd.drawQR(payload, 18, 45, 99, 4) is False:
+                    raise ValueError('QR rendering failed')
+                text(title, 8, 0x00FF88)
+                text('Scansiona col tel.', 164)
+                text(status[:19], 182)
+                text('[B] Avanti', 202)
+                text('[A] Esci - 3 min', 222)
+                return
+            except (AttributeError, ValueError, TypeError, OSError):
+                # Keep setup usable on firmware builds without the QR drawing API.
+                self._wifi_qr_available = False
+                Lcd.clear(0x000000)
+
+        lines = ("CONFIGURA WI-FI", status[:19], "Rete sul telefono:", ssid,
+                 "Password:", password, "Browser: http://", address,
+                 "[B] QR  [A] Esci", "Scadenza: 3 minuti")
+        for index, line in enumerate(lines):
+            text(line, 8 + index * 22, 0x00FF88 if index == 0 else 0xFFFFFF)
+
+    def show_harvest_timing(self, timings, synced):
+        """Diagnostic screen: sync has finished and radios have been shut down."""
+        self.display_on()
+        M5.update()
+        Lcd.clear(0x000000)
+        Lcd.setFont(M5.Lcd.FONTS.DejaVu12)
+        Lcd.setTextColor(0xFFFFFF, 0x000000)
+        rows = [('HARVEST TEMPI', None),
+                ('Sync OK' if synced else 'Sync fallito', None),
+                ('Wi-Fi', 'wifi'), ('POST', 'post'), ('GET', 'get'),
+                ('Radio off', 'off'), ('Animazione', 'presentation'),
+                ('Sync', 'sync'), ('Totale', 'total')]
+        for index, (label, key) in enumerate(rows):
+            Lcd.setCursor(3, 6 + index * 23)
+            if key is None:
+                Lcd.print(label)
+            else:
+                elapsed = timings.get(key)
+                value = '--' if elapsed is None else '%.2fs' % (elapsed / 1000)
+                Lcd.print(label + ': ' + value)
+        Lcd.setCursor(3, 222)
+        Lcd.print('[A/B] Continua')
+        while True:
+            M5.update()
+            if M5.BtnA.wasPressed() or M5.BtnB.wasPressed():
+                break
+            time.sleep_ms(40)
 
     def trigger_breach_alert(self, held_seconds=0):
         self.display_on()

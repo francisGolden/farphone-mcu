@@ -1,3 +1,4 @@
+from libs.diagnostic_log import log as print
 import math
 import time
 import random
@@ -6,6 +7,7 @@ from machine import Pin
 import M5
 from M5 import BtnA, BtnB, Imu, Lcd, Speaker
 from libs.network.network_client import initial_sync
+from libs.network.wifi_credentials import load_credentials
 from libs.motion_detector import SmartMotionDetector
 from libs.offline_storage import get_pending_syncs
 from libs.constants import STATE_IDLE, STATE_REVIEW, STATE_FOCUS, STATE_INTERRUPTED
@@ -109,7 +111,9 @@ session = SessionManager(
     render_ui_fn=ui.render,
     trigger_breach_fn=ui.trigger_breach_alert,
     render_sync_console_fn=ui.render_sync_console,
-    roll_crop_fn=roll_random_crop
+    roll_crop_fn=roll_random_crop,
+    show_timing_fn=(ui.show_harvest_timing
+                    if getattr(config, "HARVEST_TIMING_SCREEN", True) else None)
 )
 
 def render_current_ui():
@@ -125,6 +129,42 @@ def render_current_ui():
 # ==============================================================================
 # 3. BOOTSTRAP INITIALIZATION
 # ==============================================================================
+# Setup is restricted to boot, never launched by a failed focus-session sync.
+saved_network = load_credentials()
+configure_wifi = saved_network is None or not (
+    saved_network.get('backend_url') or getattr(config, 'BACKEND_URL', '')
+)
+if not configure_wifi:
+    ui.render_sync_console("[B] Configura Wi-Fi")
+    prompt_started = time.ticks_ms()
+    while time.ticks_diff(time.ticks_ms(), prompt_started) < 2000:
+        M5.update()
+        if BtnB.wasPressed():
+            configure_wifi = True
+            break
+        time.sleep_ms(40)
+
+if configure_wifi:
+    from libs.network.wifi_setup import run_setup
+    setup_cancelled = [False]
+
+    def cancel_wifi_setup():
+        M5.update()
+        if BtnA.wasPressed():
+            setup_cancelled[0] = True
+        elif BtnB.wasPressed():
+            ui.cycle_wifi_setup()
+        return setup_cancelled[0]
+
+    try:
+        run_setup(ui.render_wifi_setup, cancel_wifi_setup)
+    except Exception:
+        # No credential-bearing exception text in application logs.
+        ui.render_sync_console("SETUP NON RIUSCITO")
+        time.sleep_ms(1500)
+    # Consume setup button edges before the normal app loop starts.
+    M5.update()
+
 render_current_ui()
 
 local_pending = get_pending_syncs()
