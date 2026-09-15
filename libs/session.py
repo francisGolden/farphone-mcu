@@ -1,3 +1,4 @@
+from libs.diagnostic_log import log as print
 import time
 import M5
 from M5 import Lcd
@@ -12,7 +13,9 @@ from libs.frontend.pixel_art_engine import (
 
 class SessionManager:
     def __init__(self, user_id, detector, read_accel_fn, display_on_fn, play_wav_fn, 
-                 render_ui_fn, trigger_breach_fn, render_sync_console_fn, roll_crop_fn):
+                 render_ui_fn, trigger_breach_fn, render_sync_console_fn, roll_crop_fn,
+                 show_timing_fn=None):
+        self.show_timing = show_timing_fn
         self.user_id = user_id
         self.detector = detector
         self.read_accel = read_accel_fn
@@ -143,6 +146,7 @@ class SessionManager:
 
     def complete_session(self, app_state):
         """Gestisce il completamento regolare, loot botanico, XP e sincro telemetria."""
+        harvest_started = time.ticks_ms()
         self.current_state = STATE_IDLE
         self.display_on()
         app_state["is_display_on"] = True
@@ -192,6 +196,10 @@ class SessionManager:
 
         app_state["total_points"] += self.score
 
+        print("[Timing] Harvest presentation:", time.ticks_diff(time.ticks_ms(), harvest_started), "ms")
+        presentation_ms = time.ticks_diff(time.ticks_ms(), harvest_started)
+        timings = {}
+        sync_started = time.ticks_ms()
         # Invio telemetria HTTP
         synced = False
         try:
@@ -204,7 +212,8 @@ class SessionManager:
                 duration_seconds=duration_sec,
                 peek_count=self.peek_count,
                 first_peek_sec=self.first_peek_sec,
-                log_cb=self.render_sync_console
+                log_cb=self.render_sync_console,
+                timings=timings
             )
             if fresh_profile and isinstance(fresh_profile, dict):
                 synced = True
@@ -231,6 +240,14 @@ class SessionManager:
                 self.render_sync_console("STORAGE ERROR")
             time.sleep_ms(1000)
 
+        timings['presentation'] = presentation_ms
+        timings['sync'] = time.ticks_diff(time.ticks_ms(), sync_started)
+        timings['total'] = time.ticks_diff(time.ticks_ms(), harvest_started)
+        if self.show_timing:
+            self.show_timing(timings, synced)
+
+        print("[Timing] Harvest sync and fallback:", timings["sync"], "ms")
+        print("[Timing] Harvest total:", timings["total"], "ms")
         self.last_activity_ms = time.ticks_ms()
         self.render_ui(
             self.current_state,

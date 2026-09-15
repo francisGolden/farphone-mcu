@@ -1,27 +1,39 @@
+from libs.diagnostic_log import log as print
 import socket
 import json
 import config
 import network
 import time
+from libs.network.wifi_credentials import load_credentials, validate_backend_url
 from libs.offline_storage import get_pending_syncs, clear_pending_syncs
 
 wlan = network.WLAN(network.STA_IF)
 
 def connect_wifi(log_cb=None, timeout_ms=9000):
+    wifi_started = time.ticks_ms()
+    credentials = load_credentials()
+    if credentials is None:
+        if log_cb:
+            log_cb("WIFI: NOT CONFIGURED")
+        return False
     if not wlan.active():
         wlan.active(True)
     if wlan.isconnected():
+        print("[WiFi] Connected; IP / mask / gateway / DNS:", wlan.ifconfig())
         return True
     if log_cb:
         log_cb("WIFI: CONNECTING...")
-    wlan.connect(config.WIFI_SSID, config.WIFI_PASSWORD)
+    wlan.connect(credentials["ssid"], credentials["password"])
     start = time.ticks_ms()
+    print("[Timing] WiFi start:", time.ticks_diff(start, wifi_started), "ms")
     while not wlan.isconnected():
         if time.ticks_diff(time.ticks_ms(), start) > timeout_ms:
             if log_cb:
                 log_cb("WIFI: TIMEOUT")
             return False
         time.sleep_ms(150)
+    print("[Timing] WiFi ready:", time.ticks_diff(time.ticks_ms(), wifi_started), "ms")
+    print("[WiFi] Connected; IP / mask / gateway / DNS:", wlan.ifconfig())
     if log_cb:
         log_cb("WIFI OK")
     return True
@@ -38,7 +50,10 @@ def disconnect_wifi(log_cb=None):
         log_cb("WIFI: OFF")
 
 def _parse_url():
-    clean_url = config.BACKEND_URL.replace("http://", "").replace("https://", "").rstrip("/")
+    credentials = load_credentials() or {}
+    # Older devices can keep using config.py until setup is run again.
+    backend_url = credentials.get('backend_url') or getattr(config, 'BACKEND_URL', '')
+    clean_url = validate_backend_url(backend_url)[7:]
     if ":" in clean_url:
         host, port_str = clean_url.split(":")
         port = int(port_str.split("/")[0])
@@ -49,37 +64,64 @@ def _parse_url():
 
 def _raw_tcp_request(method, path, payload=None, timeout=6.0):
     """Executes a pure TCP socket HTTP/1.0 request."""
+    request_started = time.ticks_ms()
     host, port = _parse_url()
-    addr = socket.getaddrinfo(host, port)[0][-1]
-    s = socket.socket()
-    s.settimeout(timeout)
-    s.connect(addr)
+    s = None
+    stage = "DNS resolution"
+    try:
+        print("[HTTP] Resolving:", host, "port:", port)
+        phase_started = time.ticks_ms()
+        addr = socket.getaddrinfo(host, port, socket.AF_INET, socket.SOCK_STREAM)[0][-1]
+        print("[Timing]", method, "resolve:", time.ticks_diff(time.ticks_ms(), phase_started), "ms")
+        s = socket.socket()
+        s.settimeout(timeout)
+        stage = "TCP connect"
+        print("[HTTP] Connecting:", addr)
+        phase_started = time.ticks_ms()
+        s.connect(addr)
+        print("[Timing]", method, "TCP connect:", time.ticks_diff(time.ticks_ms(), phase_started), "ms")
 
-    headers = [
-        f"{method} {path} HTTP/1.0",
-        f"Host: {host}",
-        "Connection: close",
-        "Accept: application/json"
-    ]
-    
-    body_bytes = b""
-    if payload is not None:
-        body_bytes = json.dumps(payload).encode("utf-8")
-        headers.append("Content-Type: application/json")
-        headers.append(f"Content-Length: {len(body_bytes)}")
+        headers = [
+            f"{method} {path} HTTP/1.0",
+            f"Host: {host}",
+            "Connection: close",
+            "Accept: application/json"
+        ]
 
-    req_str = "\r\n".join(headers) + "\r\n\r\n"
-    s.sendall(req_str.encode("utf-8"))
-    if body_bytes:
-        s.sendall(body_bytes)
+        body_bytes = b""
+        if payload is not None:
+            body_bytes = json.dumps(payload).encode("utf-8")
+            headers.append("Content-Type: application/json")
+            headers.append(f"Content-Length: {len(body_bytes)}")
 
-    res_bytes = b""
-    while True:
-        chunk = s.recv(512)
-        if not chunk:
-            break
-        res_bytes += chunk
-    s.close()
+        req_str = "\r\n".join(headers) + "\r\n\r\n"
+        stage = "HTTP send"
+        print("[HTTP] Sending:", method)
+        phase_started = time.ticks_ms()
+        s.sendall(req_str.encode("utf-8"))
+        if body_bytes:
+            s.sendall(body_bytes)
+
+        print("[Timing]", method, "send:", time.ticks_diff(time.ticks_ms(), phase_started), "ms")
+        phase_started = time.ticks_ms()
+        stage = "HTTP receive"
+        print("[HTTP] Waiting for response")
+        res_bytes = b""
+        while True:
+            chunk = s.recv(512)
+            if not chunk:
+                break
+            if not res_bytes:
+                print("[Timing]", method, "first byte:", time.ticks_diff(time.ticks_ms(), phase_started), "ms")
+            res_bytes += chunk
+        print("[Timing]", method, "response including close:", time.ticks_diff(time.ticks_ms(), phase_started), "ms")
+        print("[Timing]", method, "total:", time.ticks_diff(time.ticks_ms(), request_started), "ms")
+    except OSError as exc:
+        print("[HTTP] Failed at", stage, ":", exc)
+        raise
+    finally:
+        if s is not None:
+            s.close()
 
     raw_resp = res_bytes.decode("utf-8")
     status_line = raw_resp.split("\r\n")[0] if raw_resp else ""
@@ -115,27 +157,39 @@ def send_harvest_raw(user_id, seed_identifier, plant_identifier, xp_earned, harv
     print(f"[HTTP POST /api/harvest] Status: {status} | Body: {body}")
     return "200" in status
 
-def sync_session_event(user_id, seed_identifier, plant_identifier, xp_earned, harvestOutcome, duration_seconds, peek_count=0, first_peek_sec=None,log_cb=None):
+def sync_session_event(user_id, seed_identifier, plant_identifier, xp_earned, harvestOutcome, duration_seconds, peek_count=0, first_peek_sec=None,log_cb=None, timings=None):
     """
     Connects to Wi-Fi, delivers session outcome telemetry (SUCCESSFUL or FAILED),
     refreshes user profile on SUCCESSFUL completions, and cleanly tears down Wi-Fi.
     """
+    if timings is not None:
+        timings.clear()
+
+    def measured(name, fn, *args, **kwargs):
+        if timings is None:
+            return fn(*args, **kwargs)
+        started = time.ticks_ms()
+        try:
+            return fn(*args, **kwargs)
+        finally:
+            timings[name] = time.ticks_diff(time.ticks_ms(), started)
+
     try:
-        if not connect_wifi(log_cb=log_cb):
+        if not measured('wifi', connect_wifi, log_cb=log_cb):
             return None
 
-        ok = send_harvest_raw(user_id, seed_identifier, plant_identifier, xp_earned, harvestOutcome, duration_seconds, peek_count, first_peek_sec)
+        ok = measured('post', send_harvest_raw, user_id, seed_identifier, plant_identifier, xp_earned, harvestOutcome, duration_seconds, peek_count, first_peek_sec)
         if ok and harvestOutcome == "SUCCESSFUL":
             if log_cb:
                 log_cb("SYNC PROFILE...")
-            profile = fetch_user_raw(user_id)
+            profile = measured('get', fetch_user_raw, user_id)
             return profile if profile else True
         return ok
     except Exception as e:
         print("[Session API] Err:", e)
         return False
     finally:
-        disconnect_wifi(log_cb=log_cb)
+        measured('off', disconnect_wifi, log_cb=log_cb)
 
 def initial_sync(user_id, log_cb=None):
     """Flushes offline logs and retrieves fresh user profile at boot."""

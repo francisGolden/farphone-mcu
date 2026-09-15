@@ -1,4 +1,5 @@
 """Reduce CPU frequency while the application display is off."""
+from libs.diagnostic_log import log as print
 import machine
 import time
 
