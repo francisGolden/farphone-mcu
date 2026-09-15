@@ -32,8 +32,10 @@ def disconnect_wifi(log_cb=None):
             wlan.disconnect()
     except Exception:
         pass
+    # Disconnecting alone leaves the station interface powered.
+    wlan.active(False)
     if log_cb:
-        log_cb("WIFI: IDLE")
+        log_cb("WIFI: OFF")
 
 def _parse_url():
     clean_url = config.BACKEND_URL.replace("http://", "").replace("https://", "").rstrip("/")
@@ -46,7 +48,7 @@ def _parse_url():
     return host, port
 
 def _raw_tcp_request(method, path, payload=None, timeout=6.0):
-    """Esegue una chiamata HTTP/1.0 pura via TCP Socket."""
+    """Executes a pure TCP socket HTTP/1.0 request."""
     host, port = _parse_url()
     addr = socket.getaddrinfo(host, port)[0][-1]
     s = socket.socket()
@@ -61,7 +63,7 @@ def _raw_tcp_request(method, path, payload=None, timeout=6.0):
     ]
     
     body_bytes = b""
-    if payload:
+    if payload is not None:
         body_bytes = json.dumps(payload).encode("utf-8")
         headers.append("Content-Type: application/json")
         headers.append(f"Content-Length: {len(body_bytes)}")
@@ -85,7 +87,7 @@ def _raw_tcp_request(method, path, payload=None, timeout=6.0):
     return status_line, body
 
 def fetch_user_raw(user_id):
-    """Recupera profilo senza gestire il Wi-Fi (presuppone Wi-Fi già connesso)."""
+    """Fetches user profile (assumes Wi-Fi is already connected)."""
     status, body = _raw_tcp_request("GET", f"/api/user?id={user_id}")
     print(f"[HTTP GET /api/user] Status: {status} | Body: {body}")
     if "200" not in status:
@@ -97,76 +99,89 @@ def fetch_user_raw(user_id):
         return {"username": str(uname), "totalPoints": int(pts)}
     return None
 
-def send_update_raw(user_id, score, plant_type):
-    """Invia punti senza gestire il Wi-Fi (presuppone Wi-Fi già connesso)."""
+def send_harvest_raw(user_id, seed_identifier, plant_identifier, xp_earned, harvestOutcome, duration_seconds, peek_count, first_peek_sec):
+    """Sends harvest/session event over an established connection."""
     payload = {
-        "id": user_id,
-        "scoreToAdd": score,
-        "plantType": plant_type
+        "userId": user_id,
+        "seedIdentifier": seed_identifier,
+        "plantIdentifier": plant_identifier,
+        "xpEarned": xp_earned,
+        "harvestOutcome": harvestOutcome,
+        "durationSeconds": duration_seconds,
+        "peekCount": peek_count,
+        "firstPeekSec": first_peek_sec
     }
-    status, body = _raw_tcp_request("POST", "/api/user/update", payload=payload)
-    print(f"[HTTP POST /api/user/update] Status: {status} | Body: {body}")
+    status, body = _raw_tcp_request("POST", "/api/harvest", payload=payload)
+    print(f"[HTTP POST /api/harvest] Status: {status} | Body: {body}")
     return "200" in status
 
-# Chiamata isolata utilizzata da complete_session durante il gioco
-def update_user_points(user_id, score_to_add, plant_type=None, log_cb=None):
-    if not connect_wifi(log_cb=log_cb):
-        return False
+def sync_session_event(user_id, seed_identifier, plant_identifier, xp_earned, harvestOutcome, duration_seconds, peek_count=0, first_peek_sec=None,log_cb=None):
+    """
+    Connects to Wi-Fi, delivers session outcome telemetry (SUCCESSFUL or FAILED),
+    refreshes user profile on SUCCESSFUL completions, and cleanly tears down Wi-Fi.
+    """
     try:
-        return send_update_raw(user_id, score_to_add, plant_type)
+        if not connect_wifi(log_cb=log_cb):
+            return None
+
+        ok = send_harvest_raw(user_id, seed_identifier, plant_identifier, xp_earned, harvestOutcome, duration_seconds, peek_count, first_peek_sec)
+        if ok and harvestOutcome == "SUCCESSFUL":
+            if log_cb:
+                log_cb("SYNC PROFILE...")
+            profile = fetch_user_raw(user_id)
+            return profile if profile else True
+        return ok
     except Exception as e:
-        print("[Update API] Err:", e)
+        print("[Session API] Err:", e)
         return False
     finally:
         disconnect_wifi(log_cb=log_cb)
 
-# FUNZIONE UNIFICATA DI BOOTSTRAP: Flush code offline + Get profilo in un colpo solo
 def initial_sync(user_id, log_cb=None):
-    """
-    1. Si connette una sola volta al Wi-Fi
-    2. Svuota la coda offline inviando le sessioni arretrate
-    3. Recupera il profilo aggiornato
-    4. Disconnette il Wi-Fi
-    """
-    if not connect_wifi(log_cb=log_cb):
-        return None
-
+    """Flushes offline logs and retrieves fresh user profile at boot."""
     try:
-        # 1. Flush della memoria flash
+        if not connect_wifi(log_cb=log_cb):
+            return None
+
         pending = get_pending_syncs()
         if pending:
-            print(f"[Init Sync] Trovati {len(pending)} raccolti offline da inviare...")
+            print(f"[Init Sync] Flushing {len(pending)} offline records...")
             if log_cb:
                 log_cb(f"SYNC OFFLINE ({len(pending)})...")
             remaining = []
             for item in pending:
                 try:
-                    ok = send_update_raw(user_id, item["score"], item["plantType"])
+                    seed = item.get("seedIdentifier")
+                    plant = item.get("plantIdentifier")
+                    score = item.get("xpEarned", 0)
+                    harvestOutcome = item.get("harvestOutcome", "SUCCESSFUL")
+                    duration = item.get("durationSeconds", 0)
+                    peeks = item.get("peekCount", 0)
+                    first_p = item.get("firstPeekSec")
+
+                    ok = send_harvest_raw(user_id, seed, plant, score, harvestOutcome, duration, peeks, first_p)
                     if not ok:
                         remaining.append(item)
                 except Exception as ex:
-                    print("[Init Sync] Err singolo invio:", ex)
+                    print("[Init Sync] Err sending item:", ex)
                     remaining.append(item)
-            
+
             if not remaining:
                 clear_pending_syncs()
-                print("[Init Sync] Coda offline interamente svuotata!")
+                print("[Init Sync] Offline queue emptied successfully.")
             else:
-                # Sovrascrive mantenendo solo quelli falliti
                 try:
                     with open("pending_sync.json", "w") as f:
                         json.dump(remaining, f)
                 except Exception:
                     pass
 
-        # 2. Lettura del profilo fresco dal backend
         if log_cb:
             log_cb("FETCHING PROFILE...")
-        profile = fetch_user_raw(user_id)
-        return profile
+        return fetch_user_raw(user_id)
 
     except Exception as exc:
-        print("[Init Sync] Errore generale:", exc)
+        print("[Init Sync] General error:", exc)
         return None
     finally:
         disconnect_wifi(log_cb=log_cb)

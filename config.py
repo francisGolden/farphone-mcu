@@ -7,3 +7,6 @@ BACKEND_URL = ""
 
 # Synchronization interval in milliseconds (e.g. 60000 = 60s)
 SYNC_INTERVAL_MS = 60000
+
+# Set False to disable timed light sleep when debugging via USB/Thonny.
+LIGHT_SLEEP_ENABLED = True
