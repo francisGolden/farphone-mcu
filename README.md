@@ -18,6 +18,14 @@ Each seed represents a part of life worth tending. Some grow inward, through res
 
 The reward can wait. When your session ends, Farphone saves your harvest quietly. The screen, sound, and synchronization appear only when you return to the stick. Stay with your book, your work, or your conversation for as long as you like.
 
+## Why a separate device?
+
+Starting a focus session in a phone app often means unlocking the very device you are trying to put aside. That moment can expose notification badges and familiar paths into other apps. Farphone lets you choose an intention and check session progress on a dedicated device, without opening the phone's interface.
+
+The hardware also makes the commitment physical. Leaving the phone and stick in another room adds a journey between an impulse and a check. Resting the stick on the phone means reaching for the phone will usually move the stick as well. During focus, the firmware compares accelerometer readings with the starting position; sufficient tilt or sustained movement ends the session, records a `FAILED` outcome, and awards no XP. This creates friction at the moment of choice without depending on phone app permissions or operating system limits.
+
+The single-purpose stick runs the session locally, away from the phone's notifications and background app behavior. It records button peeks, including their count and the time of the first peek, and saves session outcomes for later synchronization. These are measures of interaction with Farphone; the stick does not measure phone screen time.
+
 ## What it does
 
 - Seven intentions, each with its own duration and plant collection.
@@ -195,6 +203,7 @@ Wi-Fi credentials are stored unencrypted on the device. Do not include your `wif
 - Offline storage holds up to 500 events. A corrupt or full queue produces a storage error rather than silently discarding sessions.
 - The firmware sends no `timestamp`; the server assigns it when the POST arrives. Offline delivery therefore does not preserve the original completion time on the server.
 - Delivery is not guaranteed to be exactly once if a server response is lost after accepting an event.
+- Peek counts, first-peek timing, and motion-triggered failures describe interactions with the stick. Their use as behavioral or clinical research measures has not been validated.
 - The UI currently mixes English labels with some Italian setup text and plant names.
 
 ## Development and troubleshooting
