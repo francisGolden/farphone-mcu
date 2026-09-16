@@ -2,7 +2,7 @@
 
 **Put your phone aside. Give your life room to grow.**
 
-Farphone is a small physical companion for digital wellbeing, built for the **M5Stack StickS3**. Place your phone face down with the stick resting on its back, choose an intention, and spend time on something you want to nurture. A completed session grows a plant and earns XP for your garden.
+Farphone is a small physical companion for digital wellbeing, built for the **M5Stack StickS3**. Place your phone face down with the stick resting on its back, as far away from you as possible, choose an intention, and spend time on something you want to nurture. A completed session grows a plant and earns XP for your garden.
 
 The stick runs a MicroPython application on **UIFlow2**. This repository contains its firmware application, sounds, plant catalogue, and tests. The Spring Boot backend is a separate project.
 
@@ -29,7 +29,7 @@ The reward can wait. When your session ends, Farphone saves your harvest quietly
 - Display timeout, reduced idle CPU frequency, light sleep, and Wi-Fi shutdown after synchronization.
 - A brief low-battery warning at 15% or below.
 
-The physical arrangement is central to Farphone: **lay your phone face down and place the stick on its back, with the stick's display and buttons accessible**. Reaching for the phone means moving the stick, making the impulse to check it a deliberate action that the motion detector can register. Farphone senses the stick's movement; it does not monitor apps or lock the phone's operating system.
+The physical arrangement is central to Farphone: **lay your phone face down, place the stick on its back with the display facing up, and leave both as far from you as possible, ideally in another room**. Phone proximity is a major factor in how often we check it and how much screen time follows; distance makes an automatic check less convenient. Reaching for the phone also means moving the stick, making the impulse to check it a deliberate action that the motion detector can register. Farphone senses the stick's movement; it does not monitor apps or lock the phone's operating system.
 
 ## Install on a StickS3
 
@@ -144,11 +144,11 @@ These durations come from `res/data/seeds_catalog.py`. Recreation is useful for 
 
 ### Plant, leave it still, and return when ready
 
-Before starting, lay your phone **screen down on a stable surface** and rest the stick **on the back of the phone**, with its display facing you and its buttons accessible. This placement makes using the phone require moving the stick.
+Before starting, take your phone and stick **as far from where you will spend the session as possible, ideally to another room**. Lay the phone **screen down on a stable surface** and rest the stick **on the back of the phone**, with its display facing up and its buttons accessible. This distance puts the phone out of easy reach, while the placement makes using it require moving the stick.
 
-Keep your pocket notebook and a pen nearby. If something occurs to you during the session that you would normally search for on your phone, jot it down and return to what you were doing. You can follow up on the notes when you decide to make time for them.
+Keep your pocket notebook and a pen with you. If something occurs to you during the session that you would normally search for on your phone, jot it down and return to what you were doing. You can follow up on the notes when you decide to make time for them.
 
-On the review screen, press **A** to start or **B** to go back. Keep the stick in that position during the opening sound and calibration, and throughout the focus session. Place it before starting, rather than moving it onto the phone once the timer is running.
+At that location, press **A** on the review screen to start or **B** to go back. Keep the stick in position during the opening sound and calibration, then leave it there throughout the focus session. Place it on the phone before starting, rather than moving it once the timer is running.
 
 The display turns off automatically. Pressing either button during focus records a **peek** and briefly shows progress. Moving the stick enough to trigger the detector before completion ends the session with a breach alert and no harvest XP.
 
