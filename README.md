@@ -10,7 +10,7 @@ The stick runs a MicroPython application on **UIFlow2**. This repository contain
 
 Attention is the soil from which our days grow. It nourishes a conversation, a meal, a night's rest, a new skill, and the quiet work of understanding ourselves.
 
-Habitual scrolling can feel like a climbing vine: almost unnoticed at first, then winding through the spaces we meant to leave for other things. Farphone invites you to loosen that grip and decide what receives your care.
+Habitual scrolling can feel like a climbing vine: almost unnoticed at first, then winding through the spaces we meant to leave for other things. With our eyes on the phone, we can stop listening to ourselves and to the people and world around us. The feed's algorithms choose what appears next; following along can leave us alienated, with our attention at the mercy of those choices. Farphone invites you to loosen that grip and decide what receives your care.
 
 Carry a pocket notebook as part of that choice. When the urge to look something up appears, write down the curiosity, question, or research idea instead: "How long does a platypus live?" A quick search can turn into tens of minutes swinging from app to app or reel to reel, like a monkey moving between vines. The notebook keeps the thought safe until you choose to explore it later, without giving the impulse your attention right now.
 
