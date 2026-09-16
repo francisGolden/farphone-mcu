@@ -20,7 +20,8 @@ class PowerManagementTests(unittest.TestCase):
                         'network': types.SimpleNamespace(WLAN=lambda _: wlan, STA_IF=0),
                         'config': types.SimpleNamespace(),
                         'libs.offline_storage': types.SimpleNamespace(
-                            get_pending_syncs=lambda: [], clear_pending_syncs=lambda: None),
+                            get_pending_syncs=lambda: [], clear_pending_syncs=lambda: None,
+                            replace_pending_syncs=Mock(), acknowledge_event=Mock()),
                     }
                     ns = {}
                     with patch.dict(sys.modules, modules):

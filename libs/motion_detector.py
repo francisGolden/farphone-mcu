@@ -24,10 +24,14 @@ class SmartMotionDetector:
 
     def reset_reference(self, initial_accel):
         """Chiama questo metodo quando la sessione inizia e il telefono è fermo."""
+        if initial_accel is None:
+            raise ValueError("Missing calibration sample")
         ax, ay, az = initial_accel
-        norm = math.sqrt(ax * ax + ay * ay + az * az) or 1.0
-        self.gravity = [ax / norm, ay / norm, az / norm]
-        self.ref_gravity = list(self.gravity)
+        norm = math.sqrt(ax * ax + ay * ay + az * az)
+        if not math.isfinite(norm) or norm < 0.1:
+            raise ValueError("Invalid gravity reference")
+        self.gravity = [ax, ay, az]
+        self.ref_gravity = [ax / norm, ay / norm, az / norm]
         self.motion_start_ms = None
 
     def update(self, raw_accel):
@@ -35,6 +39,9 @@ class SmartMotionDetector:
         Ritorna True SOLO se viene rilevato un sollevamento reale sostenuto.
         Eseguire a frequenza costante (es. ogni 20-50ms).
         """
+        if raw_accel is None:
+            self.motion_start_ms = None
+            return False
         now = time.ticks_ms()
         ax, ay, az = raw_accel
 

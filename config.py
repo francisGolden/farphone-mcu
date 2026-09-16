@@ -12,7 +12,10 @@ SYNC_INTERVAL_MS = 60000
 LIGHT_SLEEP_ENABLED = True
 
 # Temporary diagnostic screen after harvest; A/B dismisses it.
-HARVEST_TIMING_SCREEN = True
+HARVEST_TIMING_SCREEN = False
 
 # Enable only for serial debugging; keep False for battery/light-sleep tests.
 SERIAL_LOG_ENABLED = False
+
+# One short warning per discharge; rearmed 5 percentage points above this level.
+LOW_BATTERY_PERCENT = 15

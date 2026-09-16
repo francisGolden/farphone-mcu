@@ -46,6 +46,33 @@ class HttpTransportTests(unittest.TestCase):
             ns['_raw_tcp_request']('GET', '/')
         socket.socket.assert_not_called()
 
+    def test_content_length_completes_without_waiting_for_close(self):
+        ns, socket, client = self.load_transport()
+        client.recv.side_effect = [b'HTTP/1.1 200 OK\r\nContent-Length: 2\r\n\r\n{}', OSError('must not wait')]
+        self.assertEqual(ns['_raw_tcp_request']('GET', '/'), ('HTTP/1.1 200 OK', '{}'))
+        self.assertEqual(client.recv.call_count, 1)
+
+    def test_truncated_and_oversized_responses_fail(self):
+        for response in (b'HTTP/1.0 200 OK\r\nContent-Length: 10\r\n\r\n{}',
+                         b'HTTP/1.0 200 OK\r\nContent-Length: 999999\r\n\r\n'):
+            ns, socket, client = self.load_transport()
+            client.recv.side_effect = [response, b'']
+            with self.assertRaises(OSError):
+                ns['_raw_tcp_request']('GET', '/')
+            client.close.assert_called_once()
+
+    def test_total_deadline_stops_slow_response(self):
+        ns, socket, client = self.load_transport()
+        counter = [0]
+        def tick():
+            counter[0] += 1000
+            return counter[0]
+        ns['time'].ticks_ms = tick
+        client.recv.return_value = b'x'
+        with self.assertRaises(OSError):
+            ns['_raw_tcp_request']('GET', '/')
+        client.close.assert_called_once()
+
     def test_response_parsing_and_cleanup(self):
         ns, socket, client = self.load_transport()
         client.recv.side_effect = [b'HTTP/1.0 200 OK\r\n\r\n{}', b'']

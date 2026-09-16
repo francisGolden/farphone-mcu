@@ -2,9 +2,9 @@ from libs.diagnostic_log import log as print
 import time
 import M5
 from M5 import Lcd
-from libs.constants import STATE_IDLE, STATE_FOCUS, STATE_INTERRUPTED
+from libs.constants import STATE_IDLE, STATE_FOCUS, STATE_INTERRUPTED, STATE_HARVEST_PENDING
 from res.data.seeds_catalog import SEEDS_CATALOG
-from libs.offline_storage import save_pending_sync
+from libs.offline_storage import queue_session
 from libs.network.network_client import sync_session_event
 from libs.frontend.pixel_art_engine import (
     draw_mystery_sprout,
@@ -14,7 +14,10 @@ from libs.frontend.pixel_art_engine import (
 class SessionManager:
     def __init__(self, user_id, detector, read_accel_fn, display_on_fn, play_wav_fn, 
                  render_ui_fn, trigger_breach_fn, render_sync_console_fn, roll_crop_fn,
-                 show_timing_fn=None):
+                 show_timing_fn=None, display_off_fn=None, show_sync_error_fn=None):
+        self.show_sync_error = show_sync_error_fn
+        self.display_off = display_off_fn
+        self.pending_harvest = None
         self.show_timing = show_timing_fn
         self.user_id = user_id
         self.detector = detector
@@ -43,6 +46,16 @@ class SessionManager:
         self.PEEK_DURATION_MS = 5000
         self.CALIBRATION_SETTLE_MS = 600
 
+    def _queue_outcome(self, score, seed, plant, outcome, duration):
+        try:
+            return queue_session(score, seed, plant, outcome, duration,
+                                 self.peek_count, self.first_peek_sec)
+        except (OSError, ValueError) as exc:
+            print('[Storage] Session could not be saved:', exc)
+            self.render_sync_console('STORAGE ERROR')
+            time.sleep_ms(1500)
+            return None
+
     def record_peek(self, now_ms, app_state):
         """Traccia le interazioni discrete (sbirciate) durante la sessione di blocco."""
         self.peek_until_ms = time.ticks_add(now_ms, self.PEEK_DURATION_MS)
@@ -68,7 +81,15 @@ class SessionManager:
 
         self.play_wav("res/audio/seeds.wav")
         time.sleep_ms(self.CALIBRATION_SETTLE_MS)
-        self.detector.reset_reference(self.read_accel())
+        sample = self.read_accel()
+        if sample is None:
+            self.render_sync_console('IMU ERROR - RETRY')
+            return
+        try:
+            self.detector.reset_reference(sample)
+        except ValueError:
+            self.render_sync_console('IMU ERROR - RETRY')
+            return
 
         self.focus_seconds = 0
         self.score = 0
@@ -98,11 +119,12 @@ class SessionManager:
         elapsed_sec = max(0, time.ticks_diff(time.ticks_ms(), self.session_start_ms) // 1000)
         seed = SEEDS_CATALOG[app_state["selected_seed_idx"]]
 
+        event_id = self._queue_outcome(0, seed['id'], None, 'FAILED', elapsed_sec)
         self.trigger_breach_alert(held_seconds=elapsed_sec)
 
         synced = False
         try:
-            synced = sync_session_event(
+            synced = event_id is not None and sync_session_event(
                 self.user_id,
                 seed_identifier=seed["id"],
                 plant_identifier=None,
@@ -111,24 +133,14 @@ class SessionManager:
                 duration_seconds=elapsed_sec,
                 peek_count=self.peek_count,
                 first_peek_sec=self.first_peek_sec,
-                log_cb=self.render_sync_console
+                log_cb=self.render_sync_console,
+                event_id=event_id
             )
         except Exception as e:
             print("[Breach Sync] Error:", e)
 
         if not synced:
-            if save_pending_sync(
-                score=0,
-                seed_id=seed["id"],
-                plant_id=None,
-                harvestOutcome="FAILED",
-                duration_sec=elapsed_sec,
-                peek_count=self.peek_count,
-                first_peek_sec=self.first_peek_sec
-            ):
-                self.render_sync_console("SAVED OFFLINE")
-            else:
-                self.render_sync_console("STORAGE ERROR")
+            self.render_sync_console('SAVED OFFLINE' if event_id else 'STORAGE ERROR')
             time.sleep_ms(1000)
 
         self.current_state = STATE_IDLE
@@ -145,17 +157,42 @@ class SessionManager:
         )
 
     def complete_session(self, app_state):
-        """Gestisce il completamento regolare, loot botanico, XP e sincro telemetria."""
-        harvest_started = time.ticks_ms()
-        self.current_state = STATE_IDLE
-        self.display_on()
-        app_state["is_display_on"] = True
-
+        """Persist the reward silently; presentation waits for user interaction."""
+        if self.pending_harvest is not None:
+            return
         seed = SEEDS_CATALOG[app_state["selected_seed_idx"]]
         duration_sec = seed["target_sec"]
 
         picked_crop = self.roll_crop(seed)
         self.score = int(seed["bonus_base"] * picked_crop["xp_mul"])
+
+        # Persist before audio, animations or network access can interrupt completion.
+        event_id = self._queue_outcome(self.score, seed['id'], picked_crop['id'],
+                                       'SUCCESSFUL', duration_sec)
+        if event_id is None:
+            self.current_state = STATE_IDLE
+            self.score = 0
+            self.last_activity_ms = time.ticks_ms()
+            return
+
+        app_state["total_points"] += self.score
+        self.pending_harvest = (seed, picked_crop, event_id)
+        self.current_state = STATE_HARVEST_PENDING
+        self.last_activity_ms = time.ticks_ms()
+        if self.display_off:
+            self.display_off()
+        app_state["is_display_on"] = False
+
+    def reveal_harvest(self, app_state):
+        if self.pending_harvest is None:
+            return
+        seed, picked_crop, event_id = self.pending_harvest
+        self.pending_harvest = None
+        duration_sec = seed["target_sec"]
+        harvest_started = time.ticks_ms()
+        self.current_state = STATE_IDLE
+        self.display_on()
+        app_state["is_display_on"] = True
 
         rarity_badge = {
             "COM": ("COMMON",    0x00FF88),
@@ -194,8 +231,6 @@ class SessionManager:
         self.play_wav("res/audio/reward.wav")
         time.sleep_ms(1500)
 
-        app_state["total_points"] += self.score
-
         print("[Timing] Harvest presentation:", time.ticks_diff(time.ticks_ms(), harvest_started), "ms")
         presentation_ms = time.ticks_diff(time.ticks_ms(), harvest_started)
         timings = {}
@@ -213,7 +248,8 @@ class SessionManager:
                 peek_count=self.peek_count,
                 first_peek_sec=self.first_peek_sec,
                 log_cb=self.render_sync_console,
-                timings=timings
+                timings=timings,
+                event_id=event_id
             )
             if fresh_profile and isinstance(fresh_profile, dict):
                 synced = True
@@ -223,27 +259,21 @@ class SessionManager:
             elif fresh_profile is True:
                 synced = True
         except Exception as e:
+            timings['error_stage'] = 'SYNC CALL'
+            timings['error_code'] = type(e).__name__
             print("[Sync] Network error:", e)
 
         if not synced:
-            if save_pending_sync(
-                score=self.score,
-                seed_id=seed["id"],
-                plant_id=picked_crop["id"],
-                harvestOutcome="SUCCESSFUL",
-                duration_sec=duration_sec,
-                peek_count=self.peek_count,
-                first_peek_sec=self.first_peek_sec
-            ):
-                self.render_sync_console("SAVED OFFLINE")
+            if self.show_sync_error:
+                self.show_sync_error(timings)
             else:
-                self.render_sync_console("STORAGE ERROR")
-            time.sleep_ms(1000)
+                self.render_sync_console('SAVED OFFLINE')
+                time.sleep_ms(1000)
 
         timings['presentation'] = presentation_ms
         timings['sync'] = time.ticks_diff(time.ticks_ms(), sync_started)
         timings['total'] = time.ticks_diff(time.ticks_ms(), harvest_started)
-        if self.show_timing:
+        if self.show_timing and (synced or not self.show_sync_error):
             self.show_timing(timings, synced)
 
         print("[Timing] Harvest sync and fallback:", timings["sync"], "ms")

@@ -5,7 +5,7 @@ import config
 import network
 import time
 from libs.network.wifi_credentials import load_credentials, validate_backend_url
-from libs.offline_storage import get_pending_syncs, clear_pending_syncs
+from libs.offline_storage import get_pending_syncs, clear_pending_syncs, replace_pending_syncs, acknowledge_event
 
 wlan = network.WLAN(network.STA_IF)
 
@@ -83,7 +83,7 @@ def _raw_tcp_request(method, path, payload=None, timeout=6.0):
 
         headers = [
             f"{method} {path} HTTP/1.0",
-            f"Host: {host}",
+            f"Host: {host}:{port}",
             "Connection: close",
             "Accept: application/json"
         ]
@@ -107,13 +107,46 @@ def _raw_tcp_request(method, path, payload=None, timeout=6.0):
         stage = "HTTP receive"
         print("[HTTP] Waiting for response")
         res_bytes = b""
+        expected_size = None
+        headers_read = False
         while True:
+            remaining_ms = int(timeout * 1000) - time.ticks_diff(time.ticks_ms(), request_started)
+            if remaining_ms <= 0:
+                raise OSError("HTTP total timeout")
+            s.settimeout(remaining_ms / 1000)
             chunk = s.recv(512)
             if not chunk:
+                if expected_size is not None and len(res_bytes) < expected_size:
+                    raise OSError("Incomplete HTTP body")
                 break
             if not res_bytes:
                 print("[Timing]", method, "first byte:", time.ticks_diff(time.ticks_ms(), phase_started), "ms")
             res_bytes += chunk
+            if len(res_bytes) > 32768:
+                raise OSError('HTTP response too large')
+            if not headers_read:
+                boundary = res_bytes.find(b'\r\n\r\n')
+                if boundary < 0:
+                    if len(res_bytes) > 4096:
+                        raise OSError('HTTP headers too large')
+                else:
+                    if boundary > 4096:
+                        raise OSError('HTTP headers too large')
+                    headers_read = True
+                    fields = {}
+                    for line in res_bytes[:boundary].split(b'\r\n')[1:]:
+                        name, value = line.split(b':', 1)
+                        fields[name.lower()] = value.strip()
+                    if b'transfer-encoding' in fields:
+                        raise OSError('Unsupported HTTP transfer encoding')
+                    if b'content-length' in fields:
+                        length = int(fields[b'content-length'])
+                        expected_size = boundary + 4 + length
+                        if length < 0 or expected_size > 32768:
+                            raise OSError('Invalid HTTP content length')
+            if expected_size is not None and len(res_bytes) >= expected_size:
+                res_bytes = res_bytes[:expected_size]
+                break
         print("[Timing]", method, "response including close:", time.ticks_diff(time.ticks_ms(), phase_started), "ms")
         print("[Timing]", method, "total:", time.ticks_diff(time.ticks_ms(), request_started), "ms")
     except OSError as exc:
@@ -132,7 +165,7 @@ def fetch_user_raw(user_id):
     """Fetches user profile (assumes Wi-Fi is already connected)."""
     status, body = _raw_tcp_request("GET", f"/api/user?id={user_id}")
     print(f"[HTTP GET /api/user] Status: {status} | Body: {body}")
-    if "200" not in status:
+    if len(status.split()) < 2 or status.split()[1] != "200":
         return None
     data = json.loads(body)
     if isinstance(data, dict):
@@ -155,9 +188,9 @@ def send_harvest_raw(user_id, seed_identifier, plant_identifier, xp_earned, harv
     }
     status, body = _raw_tcp_request("POST", "/api/harvest", payload=payload)
     print(f"[HTTP POST /api/harvest] Status: {status} | Body: {body}")
-    return "200" in status
+    return len(status.split()) >= 2 and status.split()[1] in ("200", "201", "204")
 
-def sync_session_event(user_id, seed_identifier, plant_identifier, xp_earned, harvestOutcome, duration_seconds, peek_count=0, first_peek_sec=None,log_cb=None, timings=None):
+def sync_session_event(user_id, seed_identifier, plant_identifier, xp_earned, harvestOutcome, duration_seconds, peek_count=0, first_peek_sec=None,log_cb=None, timings=None, event_id=None):
     """
     Connects to Wi-Fi, delivers session outcome telemetry (SUCCESSFUL or FAILED),
     refreshes user profile on SUCCESSFUL completions, and cleanly tears down Wi-Fi.
@@ -174,22 +207,59 @@ def sync_session_event(user_id, seed_identifier, plant_identifier, xp_earned, ha
         finally:
             timings[name] = time.ticks_diff(time.ticks_ms(), started)
 
+    stage = 'WIFI'
+    def progress(message):
+        if timings is not None:
+            # Connection messages contain fixed labels, never SSIDs or passwords.
+            timings['wifi_status'] = message
+        if log_cb:
+            log_cb(message)
+
     try:
-        if not measured('wifi', connect_wifi, log_cb=log_cb):
+        if not measured('wifi', connect_wifi, log_cb=progress):
+            if timings is not None:
+                timings['error_stage'] = stage
+                timings['error_code'] = timings.get('wifi_status', 'NOT CONNECTED')
             return None
 
+        stage = 'POST'
+
         ok = measured('post', send_harvest_raw, user_id, seed_identifier, plant_identifier, xp_earned, harvestOutcome, duration_seconds, peek_count, first_peek_sec)
+        if not ok and timings is not None:
+            timings['error_stage'] = stage
+            timings['error_code'] = 'HTTP REJECTED'
+        if ok and event_id is not None:
+            stage = 'LOCAL ACK'
+            acknowledge_event(event_id)
         if ok and harvestOutcome == "SUCCESSFUL":
             if log_cb:
                 log_cb("SYNC PROFILE...")
-            profile = measured('get', fetch_user_raw, user_id)
-            return profile if profile else True
+            try:
+                profile = measured('get', fetch_user_raw, user_id)
+                return profile if profile else True
+            except Exception as exc:
+                # POST is already acknowledged; a profile failure must not resend it.
+                print('[Profile] Refresh failed after successful harvest:', exc)
+                return True
         return ok
     except Exception as e:
+        if timings is not None:
+            timings['error_stage'] = stage
+            args = getattr(e, 'args', ())
+            # Exclude exception messages that might contain configuration data.
+            timings['error_code'] = ('ERRNO ' + str(args[0])
+                                     if args and isinstance(args[0], int)
+                                     else type(e).__name__)
         print("[Session API] Err:", e)
         return False
     finally:
-        measured('off', disconnect_wifi, log_cb=log_cb)
+        try:
+            measured('off', disconnect_wifi, log_cb=log_cb)
+        except Exception as exc:
+            # Cleanup failure cannot undo a server/local acknowledgement.
+            if timings is not None:
+                timings['cleanup_error'] = type(exc).__name__
+            print('[WiFi] Shutdown failed:', exc)
 
 def initial_sync(user_id, log_cb=None):
     """Flushes offline logs and retrieves fresh user profile at boot."""
@@ -202,33 +272,23 @@ def initial_sync(user_id, log_cb=None):
             print(f"[Init Sync] Flushing {len(pending)} offline records...")
             if log_cb:
                 log_cb(f"SYNC OFFLINE ({len(pending)})...")
-            remaining = []
-            for item in pending:
-                try:
-                    seed = item.get("seedIdentifier")
-                    plant = item.get("plantIdentifier")
-                    score = item.get("xpEarned", 0)
-                    harvestOutcome = item.get("harvestOutcome", "SUCCESSFUL")
-                    duration = item.get("durationSeconds", 0)
-                    peeks = item.get("peekCount", 0)
-                    first_p = item.get("firstPeekSec")
-
-                    ok = send_harvest_raw(user_id, seed, plant, score, harvestOutcome, duration, peeks, first_p)
-                    if not ok:
-                        remaining.append(item)
-                except Exception as ex:
-                    print("[Init Sync] Err sending item:", ex)
-                    remaining.append(item)
-
-            if not remaining:
-                clear_pending_syncs()
-                print("[Init Sync] Offline queue emptied successfully.")
-            else:
-                try:
-                    with open("pending_sync.json", "w") as f:
-                        json.dump(remaining, f)
-                except Exception:
-                    pass
+            while pending:
+                item = pending[0]
+                # Migrate old records before transmission, keeping identity across retries.
+                if not item.get('eventId'):
+                    import os
+                    import binascii
+                    item['eventId'] = binascii.hexlify(os.urandom(16)).decode()
+                    replace_pending_syncs(pending)
+                ok = send_harvest_raw(user_id, item['seedIdentifier'],
+                    item.get('plantIdentifier'), item.get('xpEarned', 0),
+                    item.get('harvestOutcome', 'SUCCESSFUL'), item.get('durationSeconds', 0),
+                    item.get('peekCount', 0), item.get('firstPeekSec'))
+                if not ok:
+                    break
+                # Persist each acknowledgement, not just at the end of the batch.
+                pending = pending[1:]
+                replace_pending_syncs(pending)
 
         if log_cb:
             log_cb("FETCHING PROFILE...")
