@@ -115,6 +115,36 @@ class UiRenderer:
                 break
             time.sleep_ms(40)
 
+    def show_sync_error(self, details):
+        """Retain safe diagnostics on-device without relying on USB logging."""
+        self.display_on()
+        M5.update()
+        Lcd.clear(0x000000)
+        Lcd.setFont(M5.Lcd.FONTS.DejaVu12)
+        Lcd.setTextColor(0xFFFFFF, 0x000000)
+        rows = ['SAVED OFFLINE', 'Sync failed',
+                details.get('error_stage', 'UNKNOWN'),
+                details.get('error_code', 'NO DETAILS')]
+        # Long fixed labels are wrapped for the narrow stick display.
+        lines = []
+        for row in rows:
+            lines.extend([row[i:i+17] for i in range(0, len(row), 17)])
+        for key, label in (('wifi', 'Wi-Fi'), ('post', 'POST')):
+            elapsed = details.get(key)
+            lines.append(label + ': ' + ('--' if elapsed is None else '%.2fs' % (elapsed / 1000)))
+        for index, line in enumerate(lines):
+            Lcd.setCursor(3, 8 + index * 22)
+            Lcd.print(line)
+        Lcd.setCursor(3, 222)
+        Lcd.print('[A/B] Continua')
+        # Fresh input dismisses the screen; timeout limits unattended display use.
+        started = time.ticks_ms()
+        while time.ticks_diff(time.ticks_ms(), started) < 60000:
+            M5.update()
+            if M5.BtnA.wasPressed() or M5.BtnB.wasPressed():
+                break
+            time.sleep_ms(40)
+
     def trigger_breach_alert(self, held_seconds=0):
         self.display_on()
         Lcd.clear(0x000000)
@@ -192,7 +222,7 @@ class UiRenderer:
         Lcd.print("[A] PLANT & LOCK")
         Lcd.setTextColor(0x777777, 0x000000)
         Lcd.setCursor(6, 198)
-        Lcd.print("[B] NEXT INTENT")
+        Lcd.print("[B] BACK")
 
     def render(self, state, seed_idx, user_name, total_points, score, focus_seconds):
         if not self.is_display_on:
@@ -204,11 +234,11 @@ class UiRenderer:
 
         Lcd.clear(0x000000)
         bat = get_battery_percentage()
-        bat_color = 0x00FF00 if bat > 30 else (0xFFFF00 if bat > 15 else 0xFF0000)
+        bat_color = 0x888888 if bat is None else (0x00FF00 if bat > 30 else (0xFFFF00 if bat > 15 else 0xFF0000))
         Lcd.setFont(M5.Lcd.FONTS.DejaVu12)
         Lcd.setTextColor(bat_color, 0x000000)
         Lcd.setCursor(95, 6)
-        Lcd.print(f"{bat}%")
+        Lcd.print("--%" if bat is None else f"{bat}%")
 
         seed = SEEDS_CATALOG[seed_idx]
 
