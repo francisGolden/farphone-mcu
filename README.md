@@ -12,6 +12,8 @@ Attention is the soil from which our days grow. It nourishes a conversation, a m
 
 Habitual scrolling can feel like a climbing vine: almost unnoticed at first, then winding through the spaces we meant to leave for other things. Farphone invites you to loosen that grip and decide what receives your care.
 
+Carry a pocket notebook as part of that choice. When the urge to look something up appears, write down the curiosity, question, or research idea instead: "How long does a platypus live?" A quick search can turn into tens of minutes swinging from app to app or reel to reel, like a monkey moving between vines. The notebook keeps the thought safe until you choose to explore it later, without giving the impulse your attention right now.
+
 Each seed represents a part of life worth tending. Some grow inward, through rest and reflection. Others grow outward, through making things, learning, and being present with the people around us. Together, they form a garden that extends beyond the individual.
 
 The reward can wait. When your session ends, Farphone saves your harvest quietly. The screen, sound, and synchronization appear only when you return to the stick. Stay with your book, your work, or your conversation for as long as you like.
@@ -143,6 +145,8 @@ These durations come from `res/data/seeds_catalog.py`. Recreation is useful for 
 ### Plant, leave it still, and return when ready
 
 Before starting, lay your phone **screen down on a stable surface** and rest the stick **on the back of the phone**, with its display facing you and its buttons accessible. This placement makes using the phone require moving the stick.
+
+Keep your pocket notebook and a pen nearby. If something occurs to you during the session that you would normally search for on your phone, jot it down and return to what you were doing. You can follow up on the notes when you decide to make time for them.
 
 On the review screen, press **A** to start or **B** to go back. Keep the stick in that position during the opening sound and calibration, and throughout the focus session. Place it before starting, rather than moving it onto the phone once the timer is running.
 
