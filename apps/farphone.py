@@ -3,7 +3,6 @@ import math
 import time
 import random
 import config
-from machine import Pin
 import M5
 from M5 import BtnA, BtnB, Imu, Lcd, Speaker
 from libs.network.network_client import initial_sync
@@ -16,6 +15,7 @@ from libs.frontend.ui_renderer import UiRenderer
 from libs.session import SessionManager
 from libs.power_manager import CpuPowerManager
 from libs.battery_monitor import BatteryMonitor
+from libs.harvest_led import HarvestLed
 from libs.utils.get_battery_percentage import get_battery_percentage
 
 # ==============================================================================
@@ -33,17 +33,7 @@ except Exception as exc:
 Lcd.setBrightness(80)
 Lcd.clear(0x000000)
 
-try:
-    led = Pin(10, Pin.OUT)
-    led.value(1)  # Active-low: 1 = OFF
-except Exception:
-    led = None
-
-def led_blink(duration_ms=15):
-    if led:
-        led.value(0)
-        time.sleep_ms(duration_ms)
-        led.value(1)
+harvest_led = HarvestLed()
 
 def play_wav(path, volume=240):
     try:
@@ -224,7 +214,6 @@ except Exception as err:
     app_state["total_points"] = offline_accumulated
 
 last_activity_ms = time.ticks_ms()
-last_heartbeat_ms = time.ticks_ms()
 last_sensor_ok_ms = time.ticks_ms()
 # Separate adaptive reference: focus detection keeps its own orientation baseline.
 idle_gravity = list(read_accel() or (0.0, 0.0, 1.0))
@@ -277,6 +266,8 @@ while True:
             session.complete_session(app_state)
             last_activity_ms = session.last_activity_ms
 
+    harvest_led.update(session.current_state == STATE_HARVEST_PENDING, now)
+
     if session.current_state == STATE_HARVEST_PENDING:
         # Keep the session's calibrated motion reference, including slow pickup.
         pressed = BtnA.wasPressed() or BtnB.wasPressed()
@@ -286,6 +277,7 @@ while True:
             except Exception as exc:
                 print("[Battery] Audio shutdown failed:", exc)
             battery_notice_until = None
+            harvest_led.update(False, now)
             session.reveal_harvest(app_state)
             last_activity_ms = session.last_activity_ms
             idle_gravity = list(read_accel() or idle_gravity)
@@ -345,11 +337,6 @@ while True:
             continue
 
         target_sec = SEEDS_CATALOG[app_state["selected_seed_idx"]]["target_sec"]
-
-        # LED Heartbeat ogni 4 secondi
-        if time.ticks_diff(now, last_heartbeat_ms) >= 4000:
-            last_heartbeat_ms = now
-            led_blink(15)
 
         # Tick timer 1s
         if time.ticks_diff(now, session.last_ui_tick) >= 1000:

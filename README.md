@@ -61,6 +61,7 @@ libs/
   battery_monitor.py
   constants.py
   diagnostic_log.py
+  harvest_led.py
   motion_detector.py
   offline_storage.py
   power_manager.py
@@ -147,7 +148,7 @@ On the review screen, press **A** to start or **B** to go back. Keep the stick i
 
 The display turns off automatically. Pressing either button during focus records a **peek** and briefly shows progress. Moving the stick enough to trigger the detector before completion ends the session with a breach alert and no harvest XP.
 
-At the deadline, the successful event is saved locally and the display goes dark. **There is no automatic harvest sound, animation, or network request.** When you press either button or move the stick, it reveals the plant, plays the reward sounds, and attempts synchronization. That interaction is not counted as a peek or a breach.
+At the deadline, the successful event is saved locally and the display goes dark. **There is no automatic harvest sound, animation, or network request.** A brief green LED pulse every three seconds signals that the harvest is saved and you can safely move the stick. The LED stops when you reveal the reward. When you press either button or move the stick, it reveals the plant, plays the reward sounds, and attempts synchronization. That interaction is not counted as a peek or a breach.
 
 | State | Button A | Button B | Movement |
 | --- | --- | --- | --- |

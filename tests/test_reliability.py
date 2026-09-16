@@ -236,7 +236,7 @@ class HarvestDeadlineTests(unittest.TestCase):
                      if isinstance(n, ast.If) and isinstance(n.test, ast.Compare)
                      and isinstance(n.test.comparators[0], ast.Name)
                      and n.test.comparators[0].id == 'STATE_FOCUS')
-        nodes = loop.body[start:start+2]
+        nodes = loop.body[start:start+3]
         single_loop = ast.For(target=ast.Name(id='_', ctx=ast.Store()),
                              iter=ast.Tuple(elts=[ast.Constant(0)], ctx=ast.Load()),
                              body=nodes, orelse=[])
@@ -249,7 +249,7 @@ class HarvestDeadlineTests(unittest.TestCase):
                   BtnB=Mock(wasPressed=Mock(return_value=False)),
                   stop_battery_tone=Mock(), battery_tone_until=None,
                   battery_notice_until=None, read_accel=lambda:(1,0,0), idle_gravity=[0,0,1],
-                  M5=Mock(), cpu_power=Mock(), ui=Mock(is_display_on=True))
+                  M5=Mock(), cpu_power=Mock(), harvest_led=Mock(), ui=Mock(is_display_on=True))
         exec(compile(code, 'main-loop', 'exec'), ns)
         session.interrupt_session.assert_not_called()
         self.assertEqual(order, ['persist', 'audio', 'audio'])
