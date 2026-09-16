@@ -142,7 +142,8 @@ SEEDS_CATALOG = [
             # Legendary (10%)
             {"id": "FRANKINCENSE","name": "Incenso",           "rarity": "LEG", "xp_mul": 2.5},
             {"id": "PALO_SANTO",  "name": "Palo Santo",        "rarity": "LEG", "xp_mul": 2.8},
-            {"id": "LOTUS",       "name": "Loto",              "rarity": "LEG", "xp_mul": 3.5}
+            {"id": "LOTUS",       "name": "Loto",              "rarity": "LEG", "xp_mul": 3.5},
+            {"id": "TAMARIX",       "name": "Tamarisco",              "rarity": "LEG", "xp_mul": 5}
         ]
     },
     {
