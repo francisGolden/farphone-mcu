@@ -65,10 +65,10 @@ def read_accel():
         return None
 
 detector = SmartMotionDetector(
-    alpha=0.85,
-    energy_threshold=0.22,
-    sustain_ms=300,
-    tilt_threshold_rad=0.22
+    alpha=0.95,             # Preserve more of slow acceleration changes.
+    energy_threshold=0.04,  # High sensitivity with a little more noise tolerance.
+    sustain_ms=100,          # Reject isolated acceleration spikes.
+    tilt_threshold_rad=0.0175  # About 1 degree from the calibrated position.
 )
 
 # ==============================================================================

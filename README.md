@@ -220,6 +220,15 @@ python3 -B -m unittest discover -s tests -q
 
 Tests simulate hardware and network behavior. Verify motion, audio, QR scanning, and power consumption on a real StickS3.
 
+Motion detection uses a filtered acceleration threshold of 0.02 g sustained
+for 80 ms, or a tilt of 0.0175 radians (about 1 degree) from
+the starting position. The gravity filter uses alpha=0.95 to retain more of slow
+acceleration changes. The duration requirement rejects isolated acceleration
+spikes; tilt detection remains immediate. Vibrations may still end a session.
+Check gentle pickup and
+stationary behavior on the device. Very slow, level transfers can still go
+undetected because the accelerometer does not measure contact with the phone.
+
 | Symptom | Check |
 | --- | --- |
 | Missing module or unexpected argument error | Upload the complete application from one revision and restart. Check the directory layout above. |
