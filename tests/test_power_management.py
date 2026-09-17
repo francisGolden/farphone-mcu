@@ -52,7 +52,7 @@ class PowerManagementTests(unittest.TestCase):
         wlan.active.assert_called_once_with(False)
 
     def test_peek_uses_its_own_deadline(self):
-        tree = ast.parse((ROOT / 'apps/farphone.py').read_text())
+        tree = ast.parse((ROOT / 'apps/tamarix.py').read_text())
         branch = next(n for n in ast.walk(tree) if isinstance(n, ast.If)
                       and isinstance(n.test, ast.Compare)
                       and isinstance(n.test.left, ast.Attribute)
@@ -74,7 +74,7 @@ class PowerManagementTests(unittest.TestCase):
                     self.assertEqual(ns['display_expired'], expired)
 
     def test_stationary_tilt_eventually_allows_display_timeout(self):
-        tree = ast.parse((ROOT / 'apps/farphone.py').read_text())
+        tree = ast.parse((ROOT / 'apps/tamarix.py').read_text())
         branch = next(n for n in ast.walk(tree) if isinstance(n, ast.If)
                       and isinstance(n.test, ast.Compare)
                       and isinstance(n.test.comparators[0], ast.Tuple)

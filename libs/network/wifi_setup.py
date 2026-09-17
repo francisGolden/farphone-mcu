@@ -97,11 +97,11 @@ def page(token, message='', networks=()):
     # message and token are internal strings; submitted credentials are never echoed.
     return '''<!doctype html><html lang="it"><meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>Farphone · Wi-Fi</title><style>
+<title>Tamarix · Wi-Fi</title><style>
 body{font:18px system-ui;background:#f3f7f1;color:#193825;margin:32px auto;padding:20px;max-width:420px}
 label{display:block;margin-top:22px}input,select,button{box-sizing:border-box;width:100%;padding:14px;font:inherit;border-radius:10px;border:1px solid #a8bca6}
 button{margin-top:24px;background:#245b35;color:white}p{line-height:1.5}
-</style><h1>Benvenuto in Farphone</h1><p>Collega il tuo stick al Wi-Fi di casa. Usa una rete a 2,4 GHz.</p>
+</style><h1>Benvenuto in Tamarix</h1><p>Collega il tuo stick al Wi-Fi di casa. Usa una rete a 2,4 GHz.</p>
 <p role="status">''' + message + '''</p><form method="post" action="/save">
 <input type="hidden" name="token" value="''' + token + '''">
 <label for="ssid">Reti Wi-Fi disponibili</label><select id="ssid" name="ssid">
@@ -133,9 +133,9 @@ def run_setup(show, cancelled, timeout_ms=180000):
     sta = network.WLAN(network.STA_IF)
     listener = None
     # A non-hex prefix avoids QR readers treating the passphrase as a hex key.
-    password = 'Fp' + binascii.hexlify(os.urandom(6)).decode()
+    password = 'Tm' + binascii.hexlify(os.urandom(6)).decode()
     token = binascii.hexlify(os.urandom(16)).decode()
-    ssid = 'Farphone-' + password[-4:]
+    ssid = 'Tamarix-' + password[-4:]
     address = '192.168.4.1'
     started = time.ticks_ms()
 

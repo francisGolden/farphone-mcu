@@ -229,7 +229,7 @@ class HarvestDeadlineTests(unittest.TestCase):
         session.session_start_ms = 0
         session.detector.update.return_value = True
         session.interrupt_session = Mock()
-        tree = ast.parse((ROOT/'apps/farphone.py').read_text())
+        tree = ast.parse((ROOT/'apps/tamarix.py').read_text())
         loop = next(n for n in tree.body if isinstance(n, ast.While))
         # Execute the real main-loop deadline and pending-input branches together.
         start = next(i for i, n in enumerate(loop.body)
