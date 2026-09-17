@@ -17,7 +17,7 @@ This change affects firmware only. The fixed test user ID, HTTP endpoints and re
 
 Copy the following to the corresponding device paths, then restart the device:
 
-- `apps/farphone.py`
+- `apps/tamarix.py`
 - `libs/session.py`
 - `libs/offline_storage.py`
 - `libs/network/network_client.py`
@@ -66,7 +66,7 @@ by this feature. The warning rearms after a reading at least five percentage
 points above the threshold (20% by default), or after restarting the app. Unknown
 battery readings do not trigger it. Tone playback does not block motion sampling.
 
-For this feature, upload `apps/farphone.py`, `libs/session.py`,
+For this feature, upload `apps/tamarix.py`, `libs/session.py`,
 `libs/constants.py`, and the new `libs/battery_monitor.py`, alongside the earlier
 reliability changes listed above. `config.py` can optionally define
 `LOW_BATTERY_PERCENT = 15`; preserve your existing device configuration.

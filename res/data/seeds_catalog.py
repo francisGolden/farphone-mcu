@@ -66,18 +66,22 @@ SEEDS_CATALOG = [
         "accent_color": 0x9955FF,
         "pool": [
             # Common (60%)
-            {"id": "CHAMOMILE",      "name": "Camomilla",      "rarity": "COM", "xp_mul": 1.0},
-            {"id": "MALLOW",         "name": "Malva",          "rarity": "COM", "xp_mul": 1.0},
-            {"id": "MELISSA",        "name": "Melissa",        "rarity": "COM", "xp_mul": 1.0},
-            {"id": "LIME_TREE",      "name": "Tiglio",         "rarity": "COM", "xp_mul": 1.0},
+            {"id": "CHAMOMILE",           "name": "Camomilla",          "rarity": "COM", "xp_mul": 1.0},
+            {"id": "MALLOW",              "name": "Malva",              "rarity": "COM", "xp_mul": 1.0},
+            {"id": "MELISSA",             "name": "Melissa",            "rarity": "COM", "xp_mul": 1.0},
+            {"id": "LIME_TREE",           "name": "Tiglio",             "rarity": "COM", "xp_mul": 1.0},
             # Rare (30%)
-            {"id": "LAVENDER",       "name": "Lavanda",        "rarity": "RAR", "xp_mul": 1.5},
-            {"id": "VALERIAN",       "name": "Valeriana",      "rarity": "RAR", "xp_mul": 1.5},
-            {"id": "CORNFLOWER",     "name": "Fiordaliso",     "rarity": "RAR", "xp_mul": 1.5},
-            {"id": "HOPS",           "name": "Luppolo",        "rarity": "RAR", "xp_mul": 1.7},
+            {"id": "LAVENDER",            "name": "Lavanda",            "rarity": "RAR", "xp_mul": 1.5},
+            {"id": "VALERIAN",            "name": "Valeriana",          "rarity": "RAR", "xp_mul": 1.5},
+            {"id": "CORNFLOWER",          "name": "Fiordaliso",         "rarity": "RAR", "xp_mul": 1.5},
+            {"id": "HOPS",                "name": "Luppolo",            "rarity": "RAR", "xp_mul": 1.7},
+            {"id": "MIRABILIS_JALAPA",    "name": "Bella di notte",     "rarity": "RAR", "xp_mul": 1.8},
+            {"id": "MOONFLOWER",          "name": "Fiore di luna",      "rarity": "RAR", "xp_mul": 1.9},
+            {"id": "POISONBERRY",         "name": "Gelsomino nott.",    "rarity": "RAR", "xp_mul": 1.9},
             # Legendary (10%)
-            {"id": "PASSION_FLOWER", "name": "Passiflora",     "rarity": "LEG", "xp_mul": 2.5},
-            {"id": "POPPY",          "name": "Papavero",       "rarity": "LEG", "xp_mul": 3.0}
+            {"id": "PASSION_FLOWER",      "name": "Passiflora",         "rarity": "LEG", "xp_mul": 2.5},
+            {"id": "POPPY",               "name": "Papavero",           "rarity": "LEG", "xp_mul": 3.0},
+            {"id": "QUEEN_OF_THE_NIGHT",  "name": "Regina d. notte",    "rarity": "LEG", "xp_mul": 3.1}
         ]
     },
     {
@@ -142,7 +146,8 @@ SEEDS_CATALOG = [
             # Legendary (10%)
             {"id": "FRANKINCENSE","name": "Incenso",           "rarity": "LEG", "xp_mul": 2.5},
             {"id": "PALO_SANTO",  "name": "Palo Santo",        "rarity": "LEG", "xp_mul": 2.8},
-            {"id": "LOTUS",       "name": "Loto",              "rarity": "LEG", "xp_mul": 3.5}
+            {"id": "LOTUS",       "name": "Loto",              "rarity": "LEG", "xp_mul": 3.5},
+            {"id": "TAMARIX",       "name": "Tamarisco",              "rarity": "LEG", "xp_mul": 5}
         ]
     },
     {

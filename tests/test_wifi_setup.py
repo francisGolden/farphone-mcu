@@ -68,6 +68,7 @@ class SetupTests(unittest.TestCase):
         self.assertEqual(self.setup.scan_networks(self.sta), [])
         self.sta.active.assert_called_with(False)
         self.assertIn('manual_ssid', self.setup.page('token'))
+        self.assertIn('Benvenuto in Tamarix', self.setup.page('token'))
 
     def test_network_names_are_escaped_in_html(self):
         html = self.setup.page('token', networks=['<script>"&'])
@@ -89,8 +90,11 @@ class SetupTests(unittest.TestCase):
     def test_displayed_password_matches_ap_without_quote_wrapping(self):
         show = Mock()
         self.setup.run_setup(show, lambda: True)
+        ssid = show.call_args.args[0]
         password = show.call_args.args[1]
-        self.assertTrue(password.startswith('Fp'))
+        self.assertTrue(ssid.startswith('Tamarix-'))
+        self.assertEqual(ssid[-4:], password[-4:])
+        self.assertTrue(password.startswith('Tm'))
         self.assertEqual(len(password), 14)
         self.assertNotIn('"', password)
         self.assertEqual(self.ap.config.call_args.kwargs['password'], password)

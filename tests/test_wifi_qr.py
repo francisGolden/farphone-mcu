@@ -17,22 +17,22 @@ class WifiQrTests(unittest.TestCase):
 
     def test_wifi_url_and_manual_pages(self):
         ui, lcd = self.renderer()
-        args = ('Farphone-ab12', 'Fp01234567ab12', '192.168.4.1', 'Collega il telefono')
+        args = ('Tamarix-ab12', 'Tm01234567ab12', '192.168.4.1', 'Collega il telefono')
         ui.render_wifi_setup(*args)
-        lcd.drawQR.assert_called_with('WIFI:T:WPA;S:Farphone-ab12;P:Fp01234567ab12;;', 18, 45, 99, 4)
+        lcd.drawQR.assert_called_with('WIFI:T:WPA;S:Tamarix-ab12;P:Tm01234567ab12;;', 18, 45, 99, 4)
         ui.cycle_wifi_setup()
         lcd.drawQR.assert_called_with('http://192.168.4.1', 18, 45, 99, 4)
         ui.cycle_wifi_setup()
         self.assertEqual(lcd.drawQR.call_count, 2)
-        lcd.print.assert_any_call('Fp01234567ab12')
+        lcd.print.assert_any_call('Tm01234567ab12')
         ui.cycle_wifi_setup()
         self.assertEqual(lcd.drawQR.call_count, 3)
 
     def test_status_update_preserves_page(self):
         ui, lcd = self.renderer()
-        ui.render_wifi_setup('Farphone-ab12', 'Fp01234567ab12', '192.168.4.1', 'Ready')
+        ui.render_wifi_setup('Tamarix-ab12', 'Tm01234567ab12', '192.168.4.1', 'Ready')
         ui.cycle_wifi_setup()
-        ui.render_wifi_setup('Farphone-ab12', 'Fp01234567ab12', '192.168.4.1', 'Connessione...')
+        ui.render_wifi_setup('Tamarix-ab12', 'Tm01234567ab12', '192.168.4.1', 'Connessione...')
         lcd.drawQR.assert_called_with('http://192.168.4.1', 18, 45, 99, 4)
 
     def test_qr_failure_falls_back_to_manual(self):
@@ -42,8 +42,8 @@ class WifiQrTests(unittest.TestCase):
                 lcd.drawQR.return_value = False
             else:
                 lcd.drawQR.side_effect = failure
-            ui.render_wifi_setup('Farphone-ab12', 'Fp01234567ab12', '192.168.4.1', 'Ready')
-            lcd.print.assert_any_call('Fp01234567ab12')
+            ui.render_wifi_setup('Tamarix-ab12', 'Tm01234567ab12', '192.168.4.1', 'Ready')
+            lcd.print.assert_any_call('Tm01234567ab12')
             ui.cycle_wifi_setup()
             self.assertEqual(lcd.drawQR.call_count, 1)
 

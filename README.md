@@ -1,8 +1,8 @@
-# Farphone 🌱
+# Tamarix 🌱
 
 **Put your phone aside. Give your life room to grow.**
 
-Farphone is a small physical companion for digital wellbeing, built for the **M5Stack StickS3**. Place your phone face down with the stick resting on its back, as far away from you as possible, choose an intention, and spend time on something you want to nurture. A completed session grows a plant and earns XP for your garden.
+Tamarix is a small physical companion for digital wellbeing, built for the **M5Stack StickS3**. Place your phone face down with the stick resting on its back, as far away from you as possible, choose an intention, and spend time on something you want to nurture. A completed session grows a plant and earns XP for your garden.
 
 The stick runs a MicroPython application on **UIFlow2**. This repository contains its firmware application, sounds, plant catalogue, and tests. The Spring Boot backend is a separate project.
 
@@ -10,21 +10,23 @@ The stick runs a MicroPython application on **UIFlow2**. This repository contain
 
 Attention is the soil from which our days grow. It nourishes a conversation, a meal, a night's rest, a new skill, and the quiet work of understanding ourselves.
 
-Habitual scrolling can feel like a climbing vine: almost unnoticed at first, then winding through the spaces we meant to leave for other things. Farphone invites you to loosen that grip and decide what receives your care.
+Tamarix takes its name from the tamarisk. For this project, the plant represents attention that stays rooted while remaining flexible when the world pulls at it.
+
+Habitual scrolling can feel like a climbing vine: almost unnoticed at first, then winding through the spaces we meant to leave for other things. With our eyes on the phone, we can stop listening to ourselves and to the people and world around us. The feed's algorithms choose what appears next; following along can leave us alienated, with our attention at the mercy of those choices. Tamarix invites you to loosen that grip and decide what receives your care.
 
 Carry a pocket notebook as part of that choice. When the urge to look something up appears, write down the curiosity, question, or research idea instead: "How long does a platypus live?" A quick search can turn into tens of minutes swinging from app to app or reel to reel, like a monkey moving between vines. The notebook keeps the thought safe until you choose to explore it later, without giving the impulse your attention right now.
 
 Each seed represents a part of life worth tending. Some grow inward, through rest and reflection. Others grow outward, through making things, learning, and being present with the people around us. Together, they form a garden that extends beyond the individual.
 
-The reward can wait. When your session ends, Farphone saves your harvest quietly. The screen, sound, and synchronization appear only when you return to the stick. Stay with your book, your work, or your conversation for as long as you like.
+The reward can wait. When your session ends, Tamarix saves your harvest quietly. The screen, sound, and synchronization appear only when you return to the stick. Stay with your book, your work, or your conversation for as long as you like.
 
 ## Why a separate device?
 
-Starting a focus session in a phone app often means unlocking the very device you are trying to put aside. That moment can expose notification badges and familiar paths into other apps. Farphone lets you choose an intention and check session progress on a dedicated device, without opening the phone's interface.
+Starting a focus session in a phone app often means unlocking the very device you are trying to put aside. That moment can expose notification badges and familiar paths into other apps. Tamarix lets you choose an intention and check session progress on a dedicated device, without opening the phone's interface.
 
 The hardware also makes the commitment physical. Leaving the phone and stick in another room adds a journey between an impulse and a check. Resting the stick on the phone means reaching for the phone will usually move the stick as well. During focus, the firmware compares accelerometer readings with the starting position; sufficient tilt or sustained movement ends the session, records a `FAILED` outcome, and awards no XP. This creates friction at the moment of choice without depending on phone app permissions or operating system limits.
 
-The single-purpose stick runs the session locally, away from the phone's notifications and background app behavior. It records button peeks, including their count and the time of the first peek, and saves session outcomes for later synchronization. These are measures of interaction with Farphone; the stick does not measure phone screen time.
+The single-purpose stick runs the session locally, away from the phone's notifications and background app behavior. It records button peeks, including their count and the time of the first peek, and saves session outcomes for later synchronization. These are measures of interaction with Tamarix; the stick does not measure phone screen time.
 
 ## What it does
 
@@ -37,7 +39,7 @@ The single-purpose stick runs the session locally, away from the phone's notific
 - Display timeout, reduced idle CPU frequency, light sleep, and Wi-Fi shutdown after synchronization.
 - A brief low-battery warning at 15% or below.
 
-The physical arrangement is central to Farphone: **lay your phone face down, place the stick on its back with the display facing up, and leave both as far from you as possible, ideally in another room**. Phone proximity is a major factor in how often we check it and how much screen time follows; distance makes an automatic check less convenient. Reaching for the phone also means moving the stick, making the impulse to check it a deliberate action that the motion detector can register. Farphone senses the stick's movement; it does not monitor apps or lock the phone's operating system.
+The physical arrangement is central to Tamarix: **lay your phone face down, place the stick on its back with the display facing up, and leave both as far from you as possible, ideally in another room**. Phone proximity is a major factor in how often we check it and how much screen time follows; distance makes an automatic check less convenient. Reaching for the phone also means moving the stick, making the impulse to check it a deliberate action that the motion detector can register. Tamarix senses the stick's movement; it does not monitor apps or lock the phone's operating system.
 
 ## Install on a StickS3
 
@@ -66,7 +68,7 @@ The result should include:
 
 ```text
 apps/
-  farphone.py
+  tamarix.py
 libs/
   battery_monitor.py
   constants.py
@@ -100,29 +102,29 @@ config.py
 
 ### 3. Set the test identity and startup
 
-The prototype currently uses a fixed `USER_ID` in `apps/farphone.py`. For synchronization, that ID must identify a user in your backend. There is no account registration or sign-in flow on the stick yet.
+The prototype currently uses a fixed `USER_ID` in `apps/tamarix.py`. For synchronization, that ID must identify a user in your backend. There is no account registration or sign-in flow on the stick yet.
 
 To launch manually, run this in Thonny's device shell from the filesystem root:
 
 ```python
-exec(open("apps/farphone.py").read(), globals())
+exec(open("apps/tamarix.py").read(), globals())
 ```
 
 For automatic startup, back up any existing device `main.py`, then create a `main.py` at the device root containing that same line. This repository does not supply a `main.py` or replace UIFlow's `boot.py`.
 
-Set UIFlow2's **Boot Option** to **Run main.py directly** using M5Burner's configuration interface, then restart. This startup mode is described in the [official device guide](https://docs.m5stack.com/en/uiflow2/sticks3/program). Farphone handles its own Wi-Fi setup.
+Set UIFlow2's **Boot Option** to **Run main.py directly** using M5Burner's configuration interface, then restart. This startup mode is described in the [official device guide](https://docs.m5stack.com/en/uiflow2/sticks3/program). Tamarix handles its own Wi-Fi setup.
 
 #### Return to the UIFlow2 menu
 
-To restore the menu, connect the stick by USB, open **Configure** in M5Burner, and change **Boot Option** to **Show startup menu and network setup**. Restart afterward. To resume Farphone autostart, select **Run main.py directly** again. Keep the original UIFlow `boot.py` intact.
+To restore the menu, connect the stick by USB, open **Configure** in M5Burner, and change **Boot Option** to **Show startup menu and network setup**. Restart afterward. To resume Tamarix autostart, select **Run main.py directly** again. Keep the original UIFlow `boot.py` intact.
 
-The [current official UIFlow boot source](https://github.com/m5stack/uiflow-micropython/blob/master/m5stack/fs/user/boot.py) also documents a StickS3 shortcut: hold **A while powering on or resetting** to enter the startup menu. In that implementation, this saves the menu boot option, so restore the direct-run option afterward if you want automatic Farphone startup again. This shortcut has not been verified on this project's UIFlow2 2.4.5 installation; use M5Burner's configuration route if it does not work. Back up `main.py` before trying recovery shortcuts on older firmware.
+The [current official UIFlow boot source](https://github.com/m5stack/uiflow-micropython/blob/master/m5stack/fs/user/boot.py) also documents a StickS3 shortcut: hold **A while powering on or resetting** to enter the startup menu. In that implementation, this saves the menu boot option, so restore the direct-run option afterward if you want automatic Tamarix startup again. This shortcut has not been verified on this project's UIFlow2 2.4.5 installation; use M5Burner's configuration route if it does not work. Back up `main.py` before trying recovery shortcuts on older firmware.
 
 ### 4. Configure Wi-Fi and the server
 
 On first launch, the stick opens setup automatically if its network or server address is missing.
 
-1. Scan the first QR code to join the temporary `Farphone-xxxx` network. Accept staying connected even if your phone reports no Internet access.
+1. Scan the first QR code to join the temporary `Tamarix-xxxx` network. Accept staying connected even if your phone reports no Internet access.
 2. Press **B** for the second QR code. Scan it to open the setup page at `http://192.168.4.1`.
 3. Select your nearby **2.4 GHz** network and enter its password. Hidden networks can be entered manually.
 4. Enter the backend's base address, such as `http://192.168.178.45:8080`. Use the server's reachable address, not `localhost`, and omit endpoint paths such as `/api/harvest`.
@@ -132,7 +134,7 @@ The current client supports **HTTP**, without HTTPS. A server running on your co
 
 Press **B** during the two-second startup prompt to change the network or server later. In setup, B cycles the QR codes and manual instructions; A exits. See the [full Wi-Fi setup guide](docs/wifi-setup.md) for supported networks and troubleshooting.
 
-## Use Farphone
+## Use Tamarix
 
 ### Choose what to nurture
 
@@ -180,6 +182,8 @@ The battery is checked once per minute. At **15% or below**, a short tone and a 
 ## Updating and configuration
 
 Before an update, back up the device's `config.py`, `wifi_credentials.json`, and `pending_sync.json`. Upload `apps/`, `libs/`, and `res/` together, merge any new configuration options, then restart the stick. Keep the saved credentials and pending events.
+
+If you are upgrading from **Farphone**, also update the device's existing `main.py` to launch `apps/tamarix.py` using the line shown above. Uploading the new file alone will leave an older `main.py` launching `apps/farphone.py` if that file is still on the stick. Saved Wi-Fi credentials and pending session events do not need to be renamed. The temporary setup network now appears as `Tamarix-xxxx`.
 
 Defaults in `config.py`:
 
