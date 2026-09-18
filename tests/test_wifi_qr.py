@@ -17,7 +17,7 @@ class WifiQrTests(unittest.TestCase):
 
     def test_wifi_url_and_manual_pages(self):
         ui, lcd = self.renderer()
-        args = ('Tamarix-ab12', 'Tm01234567ab12', '192.168.4.1', 'Collega il telefono')
+        args = ('Tamarix-ab12', 'Tm01234567ab12', '192.168.4.1', 'Connect thy phone')
         ui.render_wifi_setup(*args)
         lcd.drawQR.assert_called_with('WIFI:T:WPA;S:Tamarix-ab12;P:Tm01234567ab12;;', 18, 45, 99, 4)
         ui.cycle_wifi_setup()
@@ -32,7 +32,7 @@ class WifiQrTests(unittest.TestCase):
         ui, lcd = self.renderer()
         ui.render_wifi_setup('Tamarix-ab12', 'Tm01234567ab12', '192.168.4.1', 'Ready')
         ui.cycle_wifi_setup()
-        ui.render_wifi_setup('Tamarix-ab12', 'Tm01234567ab12', '192.168.4.1', 'Connessione...')
+        ui.render_wifi_setup('Tamarix-ab12', 'Tm01234567ab12', '192.168.4.1', 'Connecting...')
         lcd.drawQR.assert_called_with('http://192.168.4.1', 18, 45, 99, 4)
 
     def test_qr_failure_falls_back_to_manual(self):

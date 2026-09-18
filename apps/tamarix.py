@@ -65,10 +65,10 @@ def read_accel():
         return None
 
 detector = SmartMotionDetector(
-    alpha=0.85,
-    energy_threshold=0.22,
-    sustain_ms=300,
-    tilt_threshold_rad=0.22
+    alpha=0.95,             # Preserve more of slow acceleration changes.
+    energy_threshold=0.04,  # High sensitivity with a little more noise tolerance.
+    sustain_ms=100,          # Reject isolated acceleration spikes.
+    tilt_threshold_rad=0.0175  # About 1 degree from the calibrated position.
 )
 
 # ==============================================================================
@@ -159,7 +159,7 @@ configure_wifi = saved_network is None or not (
     saved_network.get('backend_url') or getattr(config, 'BACKEND_URL', '')
 )
 if not configure_wifi:
-    ui.render_sync_console("[B] Configura Wi-Fi")
+    ui.render_sync_console("[B] Wi-Fi setup")
     prompt_started = time.ticks_ms()
     while time.ticks_diff(time.ticks_ms(), prompt_started) < 2000:
         M5.update()
@@ -184,7 +184,7 @@ if configure_wifi:
         run_setup(ui.render_wifi_setup, cancel_wifi_setup)
     except Exception:
         # No credential-bearing exception text in application logs.
-        ui.render_sync_console("SETUP NON RIUSCITO")
+        ui.render_sync_console("SETUP FAILED")
         time.sleep_ms(1500)
     # Consume setup button edges before the normal app loop starts.
     M5.update()
@@ -332,6 +332,8 @@ while True:
             continue
         last_sensor_ok_ms = now
         if detector.update(acc_sample):
+            stop_battery_tone()
+            battery_notice_until = None
             session.interrupt_session(app_state)
             last_activity_ms = session.last_activity_ms
             continue

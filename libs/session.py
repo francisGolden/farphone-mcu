@@ -203,12 +203,15 @@ class SessionManager:
         # Sequenza visuale di sblocco
         Lcd.clear(0x000000)
         draw_mystery_sprout(67, 60, 1.0)
-        Lcd.setFont(M5.Lcd.FONTS.DejaVu18)
-        Lcd.setTextColor(0xFFFFFF, 0x000000)
-        Lcd.setCursor(14, 120)
-        Lcd.print("BLOOMING...")
+        Lcd.setFont(M5.Lcd.FONTS.DejaVu12)
+        lines = ("[ PACT HONOURED ]", "The Keeper", "of Seeds grants",
+                 "thee the fruits", "of thy care.")
+        for index, line in enumerate(lines):
+            Lcd.setTextColor(0x00FF88 if index == 0 else 0xFFFFFF, 0x000000)
+            Lcd.setCursor(3, 120 + index * 20)
+            Lcd.print(line)
         self.play_wav("res/audio/harvest.wav")
-        time.sleep_ms(600)
+        time.sleep_ms(3000)
 
         Lcd.clear(0x000000)
         draw_revealed_plant(67, 55, rarity_badge[1])
@@ -218,14 +221,21 @@ class SessionManager:
         Lcd.setCursor(12, 115)
         Lcd.print(f"[{rarity_badge[0]}]")
 
-        Lcd.setFont(M5.Lcd.FONTS.DejaVu18)
+        Lcd.setFont(M5.Lcd.FONTS.DejaVu12)
         Lcd.setTextColor(0xFFFFFF, 0x000000)
-        Lcd.setCursor(10, 136)
-        Lcd.print(picked_crop["name"][:10])
+        name_lines = [""]
+        for word in picked_crop["name"].split():
+            if len(name_lines[-1]) + len(word) + 1 > 17:
+                name_lines.append(word)
+            else:
+                name_lines[-1] = (name_lines[-1] + " " + word).strip()
+        for index, line in enumerate(name_lines):
+            Lcd.setCursor(5, 136 + index * 16)
+            Lcd.print(line)
 
         Lcd.setFont(M5.Lcd.FONTS.DejaVu12)
         Lcd.setTextColor(0xFFFF00, 0x000000)
-        Lcd.setCursor(12, 168)
+        Lcd.setCursor(12, 190)
         Lcd.print(f"+{self.score} XP")
 
         self.play_wav("res/audio/reward.wav")

@@ -36,7 +36,8 @@ class SmartMotionDetector:
 
     def update(self, raw_accel):
         """
-        Ritorna True SOLO se viene rilevato un sollevamento reale sostenuto.
+        Ritorna True quando inclinazione o accelerazione superano le soglie.
+        Con sustain_ms=0 basta un campione di accelerazione sopra soglia.
         Eseguire a frequenza costante (es. ogni 20-50ms).
         """
         if raw_accel is None:
@@ -72,15 +73,15 @@ class SmartMotionDetector:
         if angular_tilt > self.tilt_threshold:
             return True
 
-        # 5. Condizione B: Movimento dinamico sostenuto (traslazione sul piano)
+        # 5. Condizione B: Accelerazione dinamica sopra soglia
         if dynamic_energy > self.energy_threshold:
             if self.motion_start_ms is None:
                 self.motion_start_ms = now
-            elif time.ticks_diff(now, self.motion_start_ms) >= self.sustain_ms:
-                # Il movimento è durato più di 350ms -> Non è una vibrazione/urto
+            if time.ticks_diff(now, self.motion_start_ms) >= self.sustain_ms:
+                # Rispetta la durata configurata, incluso lo scatto immediato.
                 return True
         else:
-            # Ritorno alla quiete: resetta il timer se il colpo è stato breve (< 350ms)
+            # Ritorno sotto soglia: resetta il timer.
             self.motion_start_ms = None
 
         return False

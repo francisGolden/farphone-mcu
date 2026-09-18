@@ -68,7 +68,7 @@ class SetupTests(unittest.TestCase):
         self.assertEqual(self.setup.scan_networks(self.sta), [])
         self.sta.active.assert_called_with(False)
         self.assertIn('manual_ssid', self.setup.page('token'))
-        self.assertIn('Benvenuto in Tamarix', self.setup.page('token'))
+        self.assertIn('Welcome, traveller', self.setup.page('token'))
 
     def test_network_names_are_escaped_in_html(self):
         html = self.setup.page('token', networks=['<script>"&'])

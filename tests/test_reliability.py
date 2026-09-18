@@ -134,10 +134,42 @@ class SyncTests(unittest.TestCase):
 
 
 class MotionTests(unittest.TestCase):
+    def test_immediate_detection_for_gentle_level_movement(self):
+        ns = {}
+        exec((ROOT/'libs/motion_detector.py').read_text(), ns)
+        ns['time'] = types.SimpleNamespace(ticks_ms=lambda: 0,
+                                          ticks_diff=lambda a, b: a-b)
+        detector = ns['SmartMotionDetector'](
+            alpha=0.95, energy_threshold=0.01, sustain_ms=0,
+            tilt_threshold_rad=0.0175)
+        detector.reset_reference((0, 0, 1))
+        for _ in range(25):
+            self.assertFalse(detector.update((0, 0, 1)))
+        self.assertTrue(detector.update((0, 0, 1.02)))
+
+    def test_positive_duration_still_rejects_brief_movement(self):
+        ns = {}
+        exec((ROOT/'libs/motion_detector.py').read_text(), ns)
+        now = [0]
+        ns['time'] = types.SimpleNamespace(ticks_ms=lambda: now[0],
+                                          ticks_diff=lambda a, b: a-b)
+        detector = ns['SmartMotionDetector'](
+            alpha=0.95, energy_threshold=0.01, sustain_ms=240)
+        detector.reset_reference((0, 0, 1))
+        self.assertFalse(detector.update((0, 0, 1.02)))
+        now[0] = 40
+        self.assertFalse(detector.update((0, 0, 1)))
+        self.assertIsNone(detector.motion_start_ms)
+        now[0] = 80
+        self.assertFalse(detector.update((0, 0, 1.04)))
+        now[0] = 320
+        self.assertTrue(detector.update((0, 0, 1.04)))
+
     def test_invalid_calibration_and_missing_sample(self):
         ns = {}
         exec((ROOT/'libs/motion_detector.py').read_text(), ns)
-        ns['time'] = types.SimpleNamespace(ticks_ms=lambda: 0)
+        ns['time'] = types.SimpleNamespace(ticks_ms=lambda: 0,
+                                          ticks_diff=lambda a, b: a-b)
         detector = ns['SmartMotionDetector']()
         for invalid in (None, (0,0,0), (float('nan'),0,1)):
             with self.assertRaises(ValueError):
@@ -186,6 +218,15 @@ class SessionPersistenceTests(unittest.TestCase):
                   lambda _:dict(id='plant', name='Plant', rarity='COM', xp_mul=1))
         app = dict(selected_seed_idx=0, total_points=100, user_name='User', is_display_on=True)
         return session, app, order, sync
+
+    def test_breach_rite_precedes_network_sync(self):
+        session, app, order, sync = self.setup_session(sync_result=True)
+        session.session_start_ms = 0
+        session.trigger_breach_alert = lambda **kwargs: order.append('rite')
+        sync.side_effect = lambda *args, **kwargs: order.append('sync') or True
+        session.interrupt_session(app)
+        self.assertEqual(order, ['persist', 'rite', 'sync'])
+        self.assertEqual(session.current_state, 'IDLE')
 
     def test_harvest_persisted_before_animation_and_only_once(self):
         session, app, order, sync = self.setup_session()
