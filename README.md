@@ -1,4 +1,4 @@
-# Tamarix 🌱
+# Tamarix 🧙‍♂️🌱
 
 **Put your phone aside. Give your life room to grow.**
 
