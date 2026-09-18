@@ -108,12 +108,12 @@ From the **THY GARDEN** screen, press **B** to browse intentions and **A** to re
 
 | Intention | Current duration | Make room for… |
 | --- | --- | --- |
-| Nourishment | 15 minutes | A meal prepared or enjoyed with attention |
+| Nourishment | 30 minutes | A meal prepared or enjoyed with attention |
 | Learning | 45 minutes | Reading, studying, and curiosity |
 | Rest | 60 minutes | Quiet and recovery |
 | Labour | 30 minutes | Focused work or making something |
 | Recreation | 1 minute | Play and enjoyment; currently a short test session |
-| Attunement | 20 minutes | Reflection and awareness |
+| Attunement | 30 minutes | Reflection and awareness |
 | Covenant | 60 minutes | Presence with other people |
 
 These durations come from `res/data/seeds_catalog.py`. Recreation is useful for trying the complete experience before starting a longer session.

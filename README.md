@@ -42,8 +42,9 @@ the timer.
    plants await.
 
 Seven seeds offer different ways to spend your time: **Nourishment, Learning,
-Rest, Labour, Recreation, Attunement, and Covenant**. Each has its own duration
-and collection of plants; Recreation is currently a one-minute trial.
+Rest, Labour, Recreation, Attunement, and Covenant**. Each has its own collection
+of plants and takes 30–60 minutes to grow, except Recreation, which remains a
+one-minute trial.
 
 Sessions work offline and save their outcomes for later synchronization.
 Tamarix senses movement of the stick; it does not lock your phone or monitor
