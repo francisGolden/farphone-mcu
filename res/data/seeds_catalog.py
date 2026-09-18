@@ -2,7 +2,7 @@ SEEDS_CATALOG = [
     {
         "id": "SEED_NOURISHMENT",
         "name": "Nourishment",
-        "target_sec": 15 * 60,
+        "target_sec": 30 * 60,
         "bonus_base": 250,
         "accent_color": 0x5CD632,
         "pool": [
@@ -130,7 +130,7 @@ SEEDS_CATALOG = [
     {
         "id": "SEED_ATTUNEMENT",
         "name": "Attunement",
-        "target_sec": 20 * 60,
+        "target_sec": 30 * 60,
         "bonus_base": 350,
         "accent_color": 0xFFDD44,
         "pool": [
