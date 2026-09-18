@@ -6,7 +6,32 @@ Tamarix is a small physical companion for digital wellbeing, built for the **M5S
 
 The stick runs a MicroPython application on **UIFlow2**. This repository contains its firmware application, sounds, plant catalogue, and tests. The Spring Boot backend is a separate project.
 
+## Il patto con Tamarix
+
+Tamarix è il Guardiano delle piante: il Signore delle Piante, Guardiano delle
+Semenze e Ministro del Giardino. Piantare un seme significa stringere un patto:
+Tamarix si impegna a farlo crescere, mentre tu lasci da parte il telefono e ti
+dedichi all'attività che hai scelto. Se infrangi il patto, il Ministro del
+Giardino ritira la sua linfa e la pianta appassisce.
+
+> Ogni germoglio nel tuo giardino è la testimonianza di un'ora strappata al rumore
+> e affidata a Tamarix, Signore delle Piante.
+
+Il display accompagna il patto con tre messaggi: **PATTO ATTIVO** durante la
+semina e la concentrazione, **PATTO INFRANTO** quando viene rilevato un movimento,
+e **PATTO ONORATO** alla rivelazione del raccolto. Il completamento resta
+silenzioso finché non torni allo stick. La citazione è narrativa: la durata
+concreta di ogni patto dipende dal seme scelto.
+
 ## A garden for your attention
+
+During Wi-Fi connection and data synchronization, the stick displays the
+*Cronache di Tamarix*: original verses in archaizing Italian, framed by a pixel-art
+open codex with a green sprout and tiled earth-toned borders on black. One verse stays visible throughout each synchronization;
+the next operation advances to another verse. No artificial loading delay is
+added. Setup instructions and errors remain explicit. Middle English is planned
+for a later localization; the current verses are original lore, not quotations
+from Dante or The Elder Scrolls.
 
 Attention is the soil from which our days grow. It nourishes a conversation, a meal, a night's rest, a new skill, and the quiet work of understanding ourselves.
 

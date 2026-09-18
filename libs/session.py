@@ -203,12 +203,15 @@ class SessionManager:
         # Sequenza visuale di sblocco
         Lcd.clear(0x000000)
         draw_mystery_sprout(67, 60, 1.0)
-        Lcd.setFont(M5.Lcd.FONTS.DejaVu18)
-        Lcd.setTextColor(0xFFFFFF, 0x000000)
-        Lcd.setCursor(14, 120)
-        Lcd.print("BLOOMING...")
+        Lcd.setFont(M5.Lcd.FONTS.DejaVu12)
+        lines = ("[ PATTO ONORATO ]", "Il Guardiano", "delle Semenze",
+                 "t'ha fatto dono", "del raccolto.")
+        for index, line in enumerate(lines):
+            Lcd.setTextColor(0x00FF88 if index == 0 else 0xFFFFFF, 0x000000)
+            Lcd.setCursor(3, 120 + index * 20)
+            Lcd.print(line)
         self.play_wav("res/audio/harvest.wav")
-        time.sleep_ms(600)
+        time.sleep_ms(3000)
 
         Lcd.clear(0x000000)
         draw_revealed_plant(67, 55, rarity_badge[1])

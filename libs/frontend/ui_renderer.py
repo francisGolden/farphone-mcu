@@ -3,10 +3,13 @@ import M5
 from M5 import Lcd
 from libs.constants import STATE_IDLE, STATE_REVIEW, STATE_FOCUS, STATE_INTERRUPTED
 from res.data.seeds_catalog import SEEDS_CATALOG
+from res.data.chronicles import CHRONICLES
 from libs.frontend.pixel_art_engine import (
     draw_mystery_sprout,
     draw_withered_crop,
-    draw_revealed_plant
+    draw_revealed_plant,
+    draw_chronicle_emblem,
+    draw_chronicle_divider
 )
 from libs.utils.get_battery_percentage import get_battery_percentage
 
@@ -19,6 +22,8 @@ class UiRenderer:
         self._wifi_setup_data = None
         self._wifi_setup_page = 0
         self._wifi_qr_available = True
+        self._chronicle_index = -1
+        self._chronicle_active = False
 
     def display_on(self):
         if self.power_manager:
@@ -150,39 +155,76 @@ class UiRenderer:
         Lcd.clear(0x000000)
         draw_withered_crop(67, 65)
 
-        Lcd.setFont(M5.Lcd.FONTS.DejaVu18)
-        Lcd.setTextColor(0xFF2222, 0x000000)
-        Lcd.setCursor(8, 126)
-        Lcd.print("CROP WITHERED")
-
         Lcd.setFont(M5.Lcd.FONTS.DejaVu12)
-        Lcd.setTextColor(0xAAAAAA, 0x000000)
-        Lcd.setCursor(10, 154)
-        Lcd.print("Contract Breached!")
-
-        Lcd.setTextColor(0xFFFFFF, 0x000000)
-        Lcd.setCursor(10, 174)
-        Lcd.print(f"Held for: {held_seconds}s")
-
-        Lcd.setTextColor(0xFF6666, 0x000000)
-        Lcd.setCursor(10, 196)
-        Lcd.print("Seed Lost: 0 XP")
+        lines = (
+            ("[ PATTO INFRANTO ]", 0xFF2222),
+            ("Il Ministro", 0xFFFFFF),
+            ("del Giardino", 0xFFFFFF),
+            ("ha ritratto", 0xFFFFFF),
+            ("la sua linfa.", 0xFFFFFF),
+            ("La fronda", 0xAAAAAA),
+            ("è avvizzita.", 0xAAAAAA),
+        )
+        for index, (line, color) in enumerate(lines):
+            Lcd.setTextColor(color, 0x000000)
+            Lcd.setCursor(3, 114 + index * 17)
+            Lcd.print(line)
 
         if self.play_wav:
             self.play_wav("res/audio/whistle.wav")
-        time.sleep_ms(1500)
+        time.sleep_ms(3500)
 
     def render_sync_console(self, step_text):
+        statuses = {
+            "WIFI: CONNECTING...": "Cerco la via...",
+            "WIFI OK": "La via è aperta.",
+            "SYNC HARVEST...": "Affido il raccolto",
+            "SYNC PROFILE...": "Consulto gli annali",
+            "FETCHING PROFILE...": "Consulto gli annali",
+            "WIFI: OFF": "Si chiude la via.",
+        }
+        status = statuses.get(step_text)
+        if step_text.startswith("SYNC OFFLINE ("):
+            status = "Reco le memorie..."
+        if status is None:
+            # Setup actions and failures must remain explicit and readable.
+            self._chronicle_active = False
+            self.display_on()
+            Lcd.clear(0x000000)
+            Lcd.setFont(M5.Lcd.FONTS.DejaVu12)
+            Lcd.setTextColor(0xFFFFFF, 0x000000)
+            for index in range(0, len(step_text), 17):
+                Lcd.setCursor(3, 65 + (index // 17) * 20)
+                Lcd.print(step_text[index:index + 17])
+            return
+
+        if not self._chronicle_active:
+            self._chronicle_index = (self._chronicle_index + 1) % len(CHRONICLES)
+            self._chronicle_active = True
+        reference, verse = CHRONICLES[self._chronicle_index]
         self.display_on()
         Lcd.clear(0x000000)
-        Lcd.setFont(M5.Lcd.FONTS.DejaVu18)
-        Lcd.setTextColor(0x00AAFF, 0x000000)
-        Lcd.setCursor(10, 20)
-        Lcd.print("SYNCING...")
         Lcd.setFont(M5.Lcd.FONTS.DejaVu12)
-        Lcd.setTextColor(0xFFFFFF, 0x000000)
-        Lcd.setCursor(10, 60)
-        Lcd.print(step_text)
+        gold, ivory = 0xB89A60, 0xDDD3BC
+        for line, y in (("CRONACHE", 9), ("DI TAMARIX", 26)):
+            Lcd.setTextColor(gold, 0x000000)
+            Lcd.setCursor(24, y)
+            Lcd.print(line)
+        draw_chronicle_divider(46)
+        draw_chronicle_emblem(67, 51)
+        Lcd.setTextColor(ivory, 0x000000)
+        for index, line in enumerate(verse):
+            Lcd.setCursor(5, 84 + index * 14)
+            Lcd.print(line)
+        Lcd.setTextColor(gold, 0x000000)
+        Lcd.setCursor(5, 193)
+        Lcd.print("Canto " + reference)
+        draw_chronicle_divider(213)
+        Lcd.setTextColor(0x999080, 0x000000)
+        Lcd.setCursor(3, 220)
+        Lcd.print(status)
+        if step_text == "WIFI: OFF":
+            self._chronicle_active = False
 
     def render_contract_review(self, selected_seed_idx):
         Lcd.clear(0x000000)
@@ -294,14 +336,14 @@ class UiRenderer:
                 Lcd.fillRect(bar_x, bar_y, fill_w, bar_h, seed["accent_color"])
 
             Lcd.setFont(M5.Lcd.FONTS.DejaVu12)
-            Lcd.setTextColor(seed["accent_color"], 0x000000)
-            Lcd.setCursor(14, 148)
-            Lcd.print(f"Seed: {seed['name'][:9]}")
-
-            Lcd.setTextColor(0xFFA500, 0x000000)
-            Lcd.setCursor(16, 172)
-            Lcd.print("PHONE LOCKED")
-
-            Lcd.setTextColor(0x555555, 0x000000)
-            Lcd.setCursor(20, 196)
-            Lcd.print("DO NOT TOUCH")
+            lines = (
+                ("[ PATTO ATTIVO ]", 0xFFA500),
+                ("Tamarix veglia", 0xFFFFFF),
+                ("sul seme.", 0xFFFFFF),
+                ("Non turbare", 0x888888),
+                ("il suo riposo.", 0x888888),
+            )
+            for index, (line, color) in enumerate(lines):
+                Lcd.setTextColor(color, 0x000000)
+                Lcd.setCursor(3, 145 + index * 18)
+                Lcd.print(line)
