@@ -159,7 +159,7 @@ configure_wifi = saved_network is None or not (
     saved_network.get('backend_url') or getattr(config, 'BACKEND_URL', '')
 )
 if not configure_wifi:
-    ui.render_sync_console("[B] Configura Wi-Fi")
+    ui.render_sync_console("[B] Wi-Fi setup")
     prompt_started = time.ticks_ms()
     while time.ticks_diff(time.ticks_ms(), prompt_started) < 2000:
         M5.update()
@@ -184,7 +184,7 @@ if configure_wifi:
         run_setup(ui.render_wifi_setup, cancel_wifi_setup)
     except Exception:
         # No credential-bearing exception text in application logs.
-        ui.render_sync_console("SETUP NON RIUSCITO")
+        ui.render_sync_console("SETUP FAILED")
         time.sleep_ms(1500)
     # Consume setup button edges before the normal app loop starts.
     M5.update()

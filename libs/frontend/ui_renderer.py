@@ -69,29 +69,29 @@ class UiRenderer:
 
             if self._wifi_setup_page == 0:
                 payload = 'WIFI:T:WPA;S:' + escape(ssid) + ';P:' + escape(password) + ';;'
-                title = '1. Collega Wi-Fi'
+                title = '1. Join Wi-Fi'
             else:
                 payload = 'http://' + address
-                title = '2. Apri il setup'
+                title = '2. Open setup'
             try:
                 # Version 4: 33 modules at 3 pixels each, plus a 4-module quiet zone.
                 Lcd.fillRect(6, 33, 123, 123, 0xFFFFFF)
                 if Lcd.drawQR(payload, 18, 45, 99, 4) is False:
                     raise ValueError('QR rendering failed')
                 text(title, 8, 0x00FF88)
-                text('Scansiona col tel.', 164)
+                text('Scan with phone', 164)
                 text(status[:19], 182)
-                text('[B] Avanti', 202)
-                text('[A] Esci - 3 min', 222)
+                text('[B] Next', 202)
+                text('[A] Leave - 3 min', 222)
                 return
             except (AttributeError, ValueError, TypeError, OSError):
                 # Keep setup usable on firmware builds without the QR drawing API.
                 self._wifi_qr_available = False
                 Lcd.clear(0x000000)
 
-        lines = ("CONFIGURA WI-FI", status[:19], "Rete sul telefono:", ssid,
+        lines = ("WI-FI SETUP", status[:19], "Join on thy phone:", ssid,
                  "Password:", password, "Browser: http://", address,
-                 "[B] QR  [A] Esci", "Scadenza: 3 minuti")
+                 "[B] QR  [A] Leave", "Closes in 3 min")
         for index, line in enumerate(lines):
             text(line, 8 + index * 22, 0x00FF88 if index == 0 else 0xFFFFFF)
 
@@ -102,11 +102,11 @@ class UiRenderer:
         Lcd.clear(0x000000)
         Lcd.setFont(M5.Lcd.FONTS.DejaVu12)
         Lcd.setTextColor(0xFFFFFF, 0x000000)
-        rows = [('HARVEST TEMPI', None),
-                ('Sync OK' if synced else 'Sync fallito', None),
+        rows = [('HARVEST TIMES', None),
+                ('Sync OK' if synced else 'Sync failed', None),
                 ('Wi-Fi', 'wifi'), ('POST', 'post'), ('GET', 'get'),
-                ('Radio off', 'off'), ('Animazione', 'presentation'),
-                ('Sync', 'sync'), ('Totale', 'total')]
+                ('Radio off', 'off'), ('Animation', 'presentation'),
+                ('Sync', 'sync'), ('Total', 'total')]
         for index, (label, key) in enumerate(rows):
             Lcd.setCursor(3, 6 + index * 23)
             if key is None:
@@ -116,7 +116,7 @@ class UiRenderer:
                 value = '--' if elapsed is None else '%.2fs' % (elapsed / 1000)
                 Lcd.print(label + ': ' + value)
         Lcd.setCursor(3, 222)
-        Lcd.print('[A/B] Continua')
+        Lcd.print('[A/B] Continue')
         while True:
             M5.update()
             if M5.BtnA.wasPressed() or M5.BtnB.wasPressed():
@@ -144,7 +144,7 @@ class UiRenderer:
             Lcd.setCursor(3, 8 + index * 22)
             Lcd.print(line)
         Lcd.setCursor(3, 222)
-        Lcd.print('[A/B] Continua')
+        Lcd.print('[A/B] Continue')
         # Fresh input dismisses the screen; timeout limits unattended display use.
         started = time.ticks_ms()
         while time.ticks_diff(time.ticks_ms(), started) < 60000:
@@ -183,8 +183,8 @@ class UiRenderer:
             Lcd.clear(0x101010)
             Lcd.setFont(M5.Lcd.FONTS.DejaVu12)
             Lcd.setTextColor(0xBBBBAF, 0x101010)
-            for index, line in enumerate(("Hai mirato", "al fango.",
-                                          "La linfa si ritrae", "nel profondo.")):
+            for index, line in enumerate(("Thou hast sought", "the mire.",
+                                          "The sap withdraws", "into the deep.")):
                 Lcd.setCursor(5, 85 + index * 20)
                 Lcd.print(line)
             time.sleep_ms(3200)
@@ -208,17 +208,17 @@ class UiRenderer:
         if step_text == "WIFI: OFF" and not self._chronicle_active:
             return
         statuses = {
-            "[B] Configura Wi-Fi": "[B] Configura Wi-Fi",
-            "WIFI: CONNECTING...": "Cerco la via...",
-            "WIFI OK": "La via è aperta.",
-            "SYNC HARVEST...": "Affido il raccolto",
-            "SYNC PROFILE...": "Consulto gli annali",
-            "FETCHING PROFILE...": "Consulto gli annali",
-            "WIFI: OFF": "Si chiude la via.",
+            "[B] Wi-Fi setup": "[B] Wi-Fi setup",
+            "WIFI: CONNECTING...": "Seeking the path",
+            "WIFI OK": "The way is open.",
+            "SYNC HARVEST...": "Bearing the yield",
+            "SYNC PROFILE...": "Reading the annals",
+            "FETCHING PROFILE...": "Reading the annals",
+            "WIFI: OFF": "The way is closed",
         }
         status = statuses.get(step_text)
         if step_text.startswith("SYNC OFFLINE ("):
-            status = "Reco le memorie..."
+            status = "Bearing memories"
         if status is None:
             # Setup actions and failures must remain explicit and readable.
             self._chronicle_active = False
@@ -240,7 +240,7 @@ class UiRenderer:
         Lcd.clear(0x000000)
         Lcd.setFont(M5.Lcd.FONTS.DejaVu12)
         gold, ivory = 0xB89A60, 0xDDD3BC
-        for line, y in (("CRONACHE", 9), ("DI TAMARIX", 26)):
+        for line, y in (("CHRONICLES", 9), ("OF TAMARIX", 26)):
             Lcd.setTextColor(gold, 0x000000)
             Lcd.setCursor(24, y)
             Lcd.print(line)
@@ -252,7 +252,7 @@ class UiRenderer:
             Lcd.print(line)
         Lcd.setTextColor(gold, 0x000000)
         Lcd.setCursor(5, 193)
-        Lcd.print("Canto " + reference)
+        Lcd.print("Book " + reference)
         draw_chronicle_divider(213)
         Lcd.setTextColor(0x999080, 0x000000)
         Lcd.setCursor(3, 220)
@@ -274,7 +274,7 @@ class UiRenderer:
         Lcd.setFont(M5.Lcd.FONTS.DejaVu12)
         Lcd.setTextColor(0xFFA500, 0x000000)
         Lcd.setCursor(10, 12)
-        Lcd.print("IL PATTO")
+        Lcd.print("THE PACT")
         Lcd.drawLine(8, 28, 127, 28, 0x553311)
 
         draw_tamarix(67, 34, scale=2)
@@ -284,17 +284,17 @@ class UiRenderer:
         Lcd.setTextColor(0xFFFFFF, 0x000000)
         Lcd.setCursor(8, 121)
         mins = seed["target_sec"] // 60
-        Lcd.print(f"{mins} min di cura" if mins > 0 else f"{seed['target_sec']}s di cura")
+        Lcd.print(f"{mins} min of care" if mins > 0 else f"{seed['target_sec']}s of care")
         Lcd.setTextColor(0x888888, 0x000000)
         Lcd.setCursor(8, 143)
-        Lcd.print("Pianta ignota")
+        Lcd.print("An unknown plant")
         draw_chronicle_divider(168)
         Lcd.setTextColor(0x00FF88, 0x000000)
         Lcd.setCursor(6, 184)
-        Lcd.print("[A] Stringi il patto")
+        Lcd.print("[A] Pledge thy word")
         Lcd.setTextColor(0x777777, 0x000000)
         Lcd.setCursor(6, 212)
-        Lcd.print("[B] Indietro")
+        Lcd.print("[B] Return")
 
     def render(self, state, seed_idx, user_name, total_points, score, focus_seconds):
         if not self.is_display_on:
@@ -318,28 +318,28 @@ class UiRenderer:
             Lcd.setFont(M5.Lcd.FONTS.DejaVu18)
             Lcd.setTextColor(0x00FF88, 0x000000)
             Lcd.setCursor(8, 20)
-            Lcd.print("GREENHOUSE")
+            Lcd.print("THY GARDEN")
 
             Lcd.setFont(M5.Lcd.FONTS.DejaVu12)
             Lcd.setTextColor(0x00AAFF, 0x000000)
             Lcd.setCursor(8, 48)
             user_disp = user_name[:9]
-            Lcd.print(f"Farm: {user_disp}")
+            Lcd.print(f"Name: {user_disp}")
             Lcd.setCursor(8, 66)
             Lcd.print(f"Total: {total_points} XP")
 
             Lcd.setTextColor(0x888888, 0x000000)
             Lcd.setCursor(8, 95)
-            Lcd.print("Intent Selected:")
+            Lcd.print("Thy chosen seed:")
             Lcd.setTextColor(seed["accent_color"], 0x000000)
             Lcd.setCursor(8, 112)
             Lcd.print(f"> {seed['name']} <")
 
             Lcd.setTextColor(0xAAAAAA, 0x000000)
             Lcd.setCursor(8, 142)
-            Lcd.print("[BTN B] Change")
+            Lcd.print("[B] Choose seed")
             Lcd.setCursor(8, 162)
-            Lcd.print("[BTN A] Pact")
+            Lcd.print("[A] Make a pact")
 
             Lcd.setTextColor(0x666666, 0x000000)
             Lcd.setCursor(8, 195)
@@ -367,11 +367,11 @@ class UiRenderer:
 
             Lcd.setFont(M5.Lcd.FONTS.DejaVu12)
             lines = (
-                ("[ PATTO ATTIVO ]", 0xFFA500),
-                ("Tamarix veglia", 0xFFFFFF),
-                ("sul seme.", 0xFFFFFF),
-                ("Non turbare", 0x888888),
-                ("il suo riposo.", 0x888888),
+                ("[ PACT SEALED ]", 0xFFA500),
+                ("Tamarix keeps", 0xFFFFFF),
+                ("thy seed.", 0xFFFFFF),
+                ("Disturb not", 0x888888),
+                ("its rest.", 0x888888),
             )
             for index, (line, color) in enumerate(lines):
                 Lcd.setTextColor(color, 0x000000)

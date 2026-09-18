@@ -1,8 +1,8 @@
-# Original verses, already wrapped for the 135-pixel portrait display.
+# Original lore in readable medieval-style English; wrapped for the stick.
 CHRONICLES = (
-    ('I, 1', ("Per l'aere bruno", 'intendo', "l'invisibil", 'calle, onde', 'giunga la voce a', 'le dimore.')),
-    ('I, 2', ('Nel verde', 'archivio il', 'Ministro ripone', 'ogni stelo che', 'dal silenzio', 'nacque.')),
-    ('II, 1', ("Ché se l'etere", 'tace, la pietra', 'serba il pegno', 'finché il dì', 'ritorni.')),
-    ('II, 2', ('Poni giù', "l'ordigno e", 'drizza il tuo', 'cammino: chi si', 'volge a tergo', 'perde la fronda.')),
-    ('III, 1', ('Non ti rimembri', 'de la polve', 'antica? Ogni', 'vizio si monda', 'col digiuno', "d'occhi.")),
+    ('I, 1', ('Through the dim', 'air I seek the', 'unseen path, that', 'our voice may', 'reach distant', 'halls.')),
+    ('I, 2', ('In the green', 'annals the', 'Minister keeps', 'each stem that', 'sprang from', 'silence.')),
+    ('II, 1', ('If the air falls', 'silent, the stone', 'shall keep thy', 'pledge until the', 'light returns.')),
+    ('II, 2', ('Lay down thy', 'device and keep', 'thy course: who', 'turns back shall', 'lose the leaf.')),
+    ('III, 1', ('Remember the dust', 'of old. Each', 'restless habit', 'fades when thine', 'eyes take their', 'rest.')),
 )

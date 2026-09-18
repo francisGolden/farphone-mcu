@@ -34,7 +34,7 @@ class ChroniclesTests(unittest.TestCase):
             self.assertEqual(ui._chronicle_index, first)
         ui.render_sync_console('WIFI: CONNECTING...')
         self.assertNotEqual(ui._chronicle_index, first)
-        lcd.print.assert_any_call('Affido il raccolto')
+        lcd.print.assert_any_call('Bearing the yield')
 
     def test_errors_and_setup_are_not_hidden_by_lore(self):
         ui, lcd = self.renderer()
@@ -48,7 +48,7 @@ class ChroniclesTests(unittest.TestCase):
     def test_offline_sync_uses_loading_screen(self):
         ui, lcd = self.renderer()
         ui.render_sync_console('SYNC OFFLINE (12)...')
-        lcd.print.assert_any_call('Reco le memorie...')
+        lcd.print.assert_any_call('Bearing memories')
         self.assertTrue(ui._chronicle_active)
 
     def test_recession_silences_audio_and_blacks_out_even_on_tone_failure(self):
@@ -69,13 +69,13 @@ class ChroniclesTests(unittest.TestCase):
             lcd.setBrightness.assert_called_with(0)
             clock.sleep_ms.assert_called_with(2000)
             self.assertEqual([call.args[0] for call in lcd.print.call_args_list],
-                             ['Hai mirato', 'al fango.', 'La linfa si ritrae', 'nel profondo.'])
+                             ['Thou hast sought', 'the mire.', 'The sap withdraws', 'into the deep.'])
 
     def test_boot_prompt_has_chronicle_and_configuration_action(self):
         ui, lcd = self.renderer()
-        ui.render_sync_console('[B] Configura Wi-Fi')
-        lcd.print.assert_any_call('CRONACHE')
-        lcd.print.assert_any_call('[B] Configura Wi-Fi')
+        ui.render_sync_console('[B] Wi-Fi setup')
+        lcd.print.assert_any_call('CHRONICLES')
+        lcd.print.assert_any_call('[B] Wi-Fi setup')
 
     def test_reading_time_counts_network_time(self):
         ui, lcd = self.renderer()
@@ -95,7 +95,7 @@ class ChroniclesTests(unittest.TestCase):
 
     def test_boot_verse_survives_into_connection(self):
         ui, lcd = self.renderer()
-        ui.render_sync_console('[B] Configura Wi-Fi')
+        ui.render_sync_console('[B] Wi-Fi setup')
         first = ui._chronicle_index
         self.now = 2000
         ui.render_sync_console('WIFI: CONNECTING...')

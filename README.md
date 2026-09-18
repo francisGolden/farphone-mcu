@@ -6,34 +6,30 @@ Tamarix is a small physical companion for digital wellbeing, built for the **M5S
 
 The stick runs a MicroPython application on **UIFlow2**. This repository contains its firmware application, sounds, plant catalogue, and tests. The Spring Boot backend is a separate project.
 
-## Il patto con Tamarix
+## The pact with Tamarix
 
-Tamarix è il Guardiano delle piante: il Signore delle Piante, Guardiano delle
-Semenze e Ministro del Giardino. Piantare un seme significa stringere un patto:
-Tamarix si impegna a farlo crescere, mentre tu lasci da parte il telefono e ti
-dedichi all'attività che hai scelto. Se infrangi il patto, il Ministro del
-Giardino ritira la sua linfa e la pianta appassisce.
+Tamarix is the Lord of Plants, Keeper of Seeds, and Minister of the Garden.
+Plant a seed and pledge thy word: he shall tend its growth while thou layest
+aside thy phone and givest thy time to thy chosen work. Break the pact, and
+the Minister withdraws his sap; the sprout returns to dust.
 
-> Ogni germoglio nel tuo giardino è la testimonianza di un'ora strappata al rumore
-> e affidata a Tamarix, Signore delle Piante.
+> Each sprout in thy garden bears witness to an hour reclaimed from noise
+> and entrusted to Tamarix, Lord of Plants.
 
-Il display accompagna il patto con tre messaggi: **PATTO ATTIVO** durante la
-semina e la concentrazione, **PATTO INFRANTO** quando viene rilevato un movimento,
-e **PATTO ONORATO** alla rivelazione del raccolto. Il completamento resta
-silenzioso finché non torni allo stick. La citazione è narrativa: la durata
-concreta di ogni patto dipende dal seme scelto.
+The pact is sealed at planting and honoured at harvest. Completion remains
+silent until thy return. The hour in this verse is figurative: each seed has
+its own duration.
 
 ## A garden for your attention
 
 During Wi-Fi connection and data synchronization, the stick displays the
-*Cronache di Tamarix*: original verses in archaizing Italian, framed by a pixel-art
-open codex with a green sprout and tiled earth-toned borders on black. One verse stays visible throughout each synchronization;
+*Chronicles of Tamarix*: original verses in readable medieval-style English, framed by a pixel-art
+portrait of Tamarix holding a green sprout and tiled earth-toned borders on black. One verse stays visible throughout each synchronization;
 the next operation advances to another verse. Each verse stays visible for 8–14 seconds, based on its word count. Network
 time counts towards this minimum; any remaining reading time is added after
 the radio is off. The boot verse continues into synchronization. Errors are
-shown immediately. Setup instructions and errors remain explicit. Middle English is planned
-for a later localization; the current verses are original lore, not quotations
-from Dante or The Elder Scrolls.
+shown immediately. Setup instructions and errors remain explicit. The language evokes medieval English with modern spelling and familiar words;
+it is not a historical Middle English transcription. The verses are original lore.
 
 Attention is the soil from which our days grow. It nourishes a conversation, a meal, a night's rest, a new skill, and the quiet work of understanding ourselves.
 
@@ -155,7 +151,7 @@ On first launch, the stick opens setup automatically if its network or server ad
 2. Press **B** for the second QR code. Scan it to open the setup page at `http://192.168.4.1`.
 3. Select your nearby **2.4 GHz** network and enter its password. Hidden networks can be entered manually.
 4. Enter the backend's base address, such as `http://192.168.178.45:8080`. Use the server's reachable address, not `localhost`, and omit endpoint paths such as `/api/harvest`.
-5. Submit with **Collega lo stick** and wait for **Wi-Fi salvato!** on the device. Reconnect your phone to its usual network.
+5. Submit with **Connect thy stick** and wait for **Wi-Fi saved!** on the device. Reconnect your phone to its usual network.
 
 The current client supports **HTTP**, without HTTPS. A server running on your computer must accept connections from the stick's network. The setup form checks the address format; it does not verify that the server is online.
 
@@ -235,7 +231,7 @@ Wi-Fi credentials are stored unencrypted on the device. Do not include your `wif
 - The firmware sends no `timestamp`; the server assigns it when the POST arrives. Offline delivery therefore does not preserve the original completion time on the server.
 - Delivery is not guaranteed to be exactly once if a server response is lost after accepting an event.
 - Peek counts, first-peek timing, and motion-triggered failures describe interactions with the stick. Their use as behavioral or clinical research measures has not been validated.
-- The UI currently mixes English labels with some Italian setup text and plant names.
+- The UI uses readable medieval-style English; technical errors retain plain English.
 
 ## Development and troubleshooting
 
@@ -267,11 +263,11 @@ undetected because the accelerometer does not measure contact with the phone.
 Further details: [Wi-Fi setup](docs/wifi-setup.md) · [Firmware reliability and device checks](docs/firmware-reliability.md).
 
 
-### La Recisione del Ramo
+### The Severing of the Bough
 
 A broken pact is presented as a solemn withdrawal: an ash-grey sprout freezes,
 fractures into rising pixel dust, then gives way to a single edict:
-«Hai mirato al fango. La linfa si ritrae nel profondo.»
+“Thou hast sought the mire. The sap withdraws into the deep.”
 The former whistle is replaced by quiet descending tones (880 Hz for 500 ms,
 622 Hz for 900 ms, then a 311 Hz pulse for 40 ms, speaker volume 120).
 Audio shuts down before two seconds of display blackout. The outcome is saved
