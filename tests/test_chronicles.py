@@ -21,6 +21,7 @@ class ChroniclesTests(unittest.TestCase):
         ns = {'Lcd': lcd, 'M5': types.SimpleNamespace(Lcd=lcd), 'time': clock,
               'CHRONICLES': CHRONICLES,
               'draw_tamarix': Mock(),
+              'draw_chronicle_emblem': Mock(),
               'draw_chronicle_divider': Mock()}
         exec(compile(ast.Module(body=[cls], type_ignores=[]), 'ui', 'exec'), ns)
         return ns['UiRenderer'](), lcd
@@ -110,3 +111,54 @@ class ChroniclesTests(unittest.TestCase):
         ui.render_sync_console('WIFI: OFF')
         lcd.clear.assert_not_called()
         self.assertEqual(self.sleeps, [])
+
+    def test_progress_redraws_only_footer_and_skips_same_message(self):
+        ui, lcd = self.renderer()
+        ui.render_sync_console('WIFI: CONNECTING...')
+        lcd.reset_mock()
+        ui.render_sync_console('WIFI OK')
+        lcd.clear.assert_not_called()
+        lcd.fillRect.assert_called_once_with(0, 219, 135, 21, 0x000000)
+        lcd.print.assert_called_once_with('The way is open.')
+        lcd.reset_mock()
+        ui.render_sync_console('WIFI OK')
+        lcd.clear.assert_not_called()
+        lcd.fillRect.assert_not_called()
+        lcd.print.assert_not_called()
+
+    def test_new_operation_redraws_full_chronicle(self):
+        ui, lcd = self.renderer()
+        ui.render_sync_console('WIFI: CONNECTING...')
+        ui.render_sync_console('WIFI: OFF')
+        lcd.reset_mock()
+        ui.render_sync_console('WIFI: CONNECTING...')
+        lcd.clear.assert_called_once()
+        lcd.print.assert_any_call('CHRONICLES')
+
+    def test_boot_does_not_draw_main_screen_before_initial_sync(self):
+        tree = ast.parse(Path('apps/tamarix.py').read_text())
+        sync_line = next(node.lineno for node in ast.walk(tree)
+                         if isinstance(node, ast.Call)
+                         and isinstance(node.func, ast.Name)
+                         and node.func.id == 'initial_sync')
+        main_renders = [node.lineno for node in tree.body
+                        if isinstance(node, ast.Expr)
+                        and isinstance(node.value, ast.Call)
+                        and isinstance(node.value.func, ast.Name)
+                        and node.value.func.id == 'render_current_ui']
+        self.assertTrue(main_renders)
+        self.assertTrue(all(line > sync_line for line in main_renders))
+
+    def test_other_screen_invalidates_partial_chronicle_redraw(self):
+        ui, lcd = self.renderer()
+        ui.render_sync_console('WIFI: CONNECTING...')
+        ns = ui.render_contract_review.__globals__
+        ns['SEEDS_CATALOG'] = [{'name': 'Rest', 'target_sec': 3600,
+                               'accent_color': 0xFFFFFF}]
+        ui.render_contract_review(0)
+        self.assertFalse(ui._chronicle_active)
+        lcd.reset_mock()
+        ui.render_sync_console('SYNC PROFILE...')
+        lcd.clear.assert_called_once()
+        lcd.print.assert_any_call('CHRONICLES')
+        lcd.print.assert_any_call('Reading the annals')

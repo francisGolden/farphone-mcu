@@ -68,8 +68,9 @@ Break it, and he withdraws his grace. Tamarix does not rage. In **the Severing
 of the Bough**, the sprout freezes and crumbles into rising ash. A final message
 announces the withdrawal of its life-giving sap, followed by silence and darkness.
 
-His pixel-art portrait accompanies the pact and the **Chronicles of Tamarix**,
-original verses shown during loading, with time allowed for reading. Their
+His pixel-art portrait accompanies the pact. An open pixel-art book illustrates
+the **Chronicles of Tamarix**, original verses shown during loading, with time
+allowed for reading. Their
 language evokes medieval English while keeping modern spelling and familiar
 words.
 
