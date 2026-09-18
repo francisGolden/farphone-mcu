@@ -223,6 +223,8 @@ def sync_session_event(user_id, seed_identifier, plant_identifier, xp_earned, ha
             return None
 
         stage = 'POST'
+        if log_cb:
+            log_cb("SYNC HARVEST...")
 
         ok = measured('post', send_harvest_raw, user_id, seed_identifier, plant_identifier, xp_earned, harvestOutcome, duration_seconds, peek_count, first_peek_sec)
         if not ok and timings is not None:

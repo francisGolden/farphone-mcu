@@ -7,27 +7,27 @@ PATH = 'wifi_credentials.json'
 
 def validate_backend_url(value):
     if not isinstance(value, str):
-        raise ValueError('Inserisci l’indirizzo HTTP del server.')
+        raise ValueError('Enter the server HTTP address.')
     value = value.strip().rstrip('/')
     if len(value) > 200 or not value.startswith('http://'):
-        raise ValueError('Usa http://nome-server:porta (HTTPS non supportato).')
+        raise ValueError('Use http://server-name:port (HTTPS is not supported).')
     authority = value[7:]
     if not authority or any(c in authority for c in '/?#@\\') or any(ord(c) <= 32 or ord(c) >= 127 for c in authority):
-        raise ValueError('Inserisci solo indirizzo e porta, senza percorso o credenziali.')
+        raise ValueError('Enter only address and port, without a path or credentials.')
     parts = authority.split(':')
     host = parts[0]
     if len(parts) > 2 or not host or any(c not in 'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789.-' for c in host):
-        raise ValueError('Nome del server non valido.')
+        raise ValueError('Invalid server name.')
     if len(parts) == 2 and (not parts[1].isdigit() or not 1 <= int(parts[1]) <= 65535):
-        raise ValueError('Porta non valida.')
+        raise ValueError('Invalid port.')
     return value
 
 
 def validate(ssid, password, backend_url=None):
     if not isinstance(ssid, str) or not 1 <= len(ssid.encode('utf-8')) <= 32:
-        raise ValueError('Il nome della rete deve contenere da 1 a 32 byte.')
+        raise ValueError('The network name must contain 1 to 32 bytes.')
     if not isinstance(password, str) or len(password.encode('utf-8')) > 64:
-        raise ValueError('Password non valida.')
+        raise ValueError('Invalid password.')
     result = {'ssid': ssid, 'password': password}
     if backend_url is not None:
         result['backend_url'] = validate_backend_url(backend_url)

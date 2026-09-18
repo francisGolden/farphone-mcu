@@ -1,12 +1,17 @@
 import time
+from libs.diagnostic_log import log as print
 import M5
 from M5 import Lcd
 from libs.constants import STATE_IDLE, STATE_REVIEW, STATE_FOCUS, STATE_INTERRUPTED
 from res.data.seeds_catalog import SEEDS_CATALOG
+from res.data.chronicles import CHRONICLES
 from libs.frontend.pixel_art_engine import (
     draw_mystery_sprout,
     draw_withered_crop,
-    draw_revealed_plant
+    draw_revealed_plant,
+    draw_tamarix,
+    draw_chronicle_divider,
+    draw_recession_frame
 )
 from libs.utils.get_battery_percentage import get_battery_percentage
 
@@ -19,6 +24,9 @@ class UiRenderer:
         self._wifi_setup_data = None
         self._wifi_setup_page = 0
         self._wifi_qr_available = True
+        self._chronicle_started_ms = None
+        self._chronicle_index = -1
+        self._chronicle_active = False
 
     def display_on(self):
         if self.power_manager:
@@ -61,29 +69,29 @@ class UiRenderer:
 
             if self._wifi_setup_page == 0:
                 payload = 'WIFI:T:WPA;S:' + escape(ssid) + ';P:' + escape(password) + ';;'
-                title = '1. Collega Wi-Fi'
+                title = '1. Join Wi-Fi'
             else:
                 payload = 'http://' + address
-                title = '2. Apri il setup'
+                title = '2. Open setup'
             try:
                 # Version 4: 33 modules at 3 pixels each, plus a 4-module quiet zone.
                 Lcd.fillRect(6, 33, 123, 123, 0xFFFFFF)
                 if Lcd.drawQR(payload, 18, 45, 99, 4) is False:
                     raise ValueError('QR rendering failed')
                 text(title, 8, 0x00FF88)
-                text('Scansiona col tel.', 164)
+                text('Scan with phone', 164)
                 text(status[:19], 182)
-                text('[B] Avanti', 202)
-                text('[A] Esci - 3 min', 222)
+                text('[B] Next', 202)
+                text('[A] Leave - 3 min', 222)
                 return
             except (AttributeError, ValueError, TypeError, OSError):
                 # Keep setup usable on firmware builds without the QR drawing API.
                 self._wifi_qr_available = False
                 Lcd.clear(0x000000)
 
-        lines = ("CONFIGURA WI-FI", status[:19], "Rete sul telefono:", ssid,
+        lines = ("WI-FI SETUP", status[:19], "Join on thy phone:", ssid,
                  "Password:", password, "Browser: http://", address,
-                 "[B] QR  [A] Esci", "Scadenza: 3 minuti")
+                 "[B] QR  [A] Leave", "Closes in 3 min")
         for index, line in enumerate(lines):
             text(line, 8 + index * 22, 0x00FF88 if index == 0 else 0xFFFFFF)
 
@@ -94,11 +102,11 @@ class UiRenderer:
         Lcd.clear(0x000000)
         Lcd.setFont(M5.Lcd.FONTS.DejaVu12)
         Lcd.setTextColor(0xFFFFFF, 0x000000)
-        rows = [('HARVEST TEMPI', None),
-                ('Sync OK' if synced else 'Sync fallito', None),
+        rows = [('HARVEST TIMES', None),
+                ('Sync OK' if synced else 'Sync failed', None),
                 ('Wi-Fi', 'wifi'), ('POST', 'post'), ('GET', 'get'),
-                ('Radio off', 'off'), ('Animazione', 'presentation'),
-                ('Sync', 'sync'), ('Totale', 'total')]
+                ('Radio off', 'off'), ('Animation', 'presentation'),
+                ('Sync', 'sync'), ('Total', 'total')]
         for index, (label, key) in enumerate(rows):
             Lcd.setCursor(3, 6 + index * 23)
             if key is None:
@@ -108,7 +116,7 @@ class UiRenderer:
                 value = '--' if elapsed is None else '%.2fs' % (elapsed / 1000)
                 Lcd.print(label + ': ' + value)
         Lcd.setCursor(3, 222)
-        Lcd.print('[A/B] Continua')
+        Lcd.print('[A/B] Continue')
         while True:
             M5.update()
             if M5.BtnA.wasPressed() or M5.BtnB.wasPressed():
@@ -136,7 +144,7 @@ class UiRenderer:
             Lcd.setCursor(3, 8 + index * 22)
             Lcd.print(line)
         Lcd.setCursor(3, 222)
-        Lcd.print('[A/B] Continua')
+        Lcd.print('[A/B] Continue')
         # Fresh input dismisses the screen; timeout limits unattended display use.
         started = time.ticks_ms()
         while time.ticks_diff(time.ticks_ms(), started) < 60000:
@@ -147,42 +155,117 @@ class UiRenderer:
 
     def trigger_breach_alert(self, held_seconds=0):
         self.display_on()
+
+        def tone(frequency, duration):
+            try:
+                if M5.Speaker.tone(frequency, duration) is False:
+                    print("[Recisione] Tone rejected:", frequency)
+            except Exception as exc:
+                print("[Recisione] Tone failed:", exc)
+
+        try:
+            try:
+                M5.Speaker.begin()
+                M5.Speaker.stop()
+                M5.Speaker.setVolume(120)
+            except Exception as exc:
+                print("[Recisione] Audio initialization failed:", exc)
+            # Il Gelo: one still silhouette, no alarm or flashing.
+            draw_recession_frame(0)
+            tone(880, 500)
+            time.sleep_ms(650)
+            # La Recisione: a descending tritone and rising ash.
+            tone(622, 900)
+            for frame in range(1, 13):
+                draw_recession_frame(frame)
+                time.sleep_ms(100)
+            # One edict, without score, title, or reprimand.
+            Lcd.clear(0x101010)
+            Lcd.setFont(M5.Lcd.FONTS.DejaVu12)
+            Lcd.setTextColor(0xBBBBAF, 0x101010)
+            for index, line in enumerate(("Thou hast sought", "the mire.",
+                                          "The sap withdraws", "into the deep.")):
+                Lcd.setCursor(5, 85 + index * 20)
+                Lcd.print(line)
+            time.sleep_ms(3200)
+            tone(311, 40)
+            time.sleep_ms(40)
+        finally:
+            try:
+                M5.Speaker.stop()
+            except Exception:
+                pass
+            try:
+                M5.Speaker.end()
+            except Exception:
+                pass
         Lcd.clear(0x000000)
-        draw_withered_crop(67, 65)
-
-        Lcd.setFont(M5.Lcd.FONTS.DejaVu18)
-        Lcd.setTextColor(0xFF2222, 0x000000)
-        Lcd.setCursor(8, 126)
-        Lcd.print("CROP WITHERED")
-
-        Lcd.setFont(M5.Lcd.FONTS.DejaVu12)
-        Lcd.setTextColor(0xAAAAAA, 0x000000)
-        Lcd.setCursor(10, 154)
-        Lcd.print("Contract Breached!")
-
-        Lcd.setTextColor(0xFFFFFF, 0x000000)
-        Lcd.setCursor(10, 174)
-        Lcd.print(f"Held for: {held_seconds}s")
-
-        Lcd.setTextColor(0xFF6666, 0x000000)
-        Lcd.setCursor(10, 196)
-        Lcd.print("Seed Lost: 0 XP")
-
-        if self.play_wav:
-            self.play_wav("res/audio/whistle.wav")
-        time.sleep_ms(1500)
+        self.display_off()
+        time.sleep_ms(2000)
 
     def render_sync_console(self, step_text):
+        # Teardown after an error must not hide it behind a fresh verse.
+        if step_text == "WIFI: OFF" and not self._chronicle_active:
+            return
+        statuses = {
+            "[B] Wi-Fi setup": "[B] Wi-Fi setup",
+            "WIFI: CONNECTING...": "Seeking the path",
+            "WIFI OK": "The way is open.",
+            "SYNC HARVEST...": "Bearing the yield",
+            "SYNC PROFILE...": "Reading the annals",
+            "FETCHING PROFILE...": "Reading the annals",
+            "WIFI: OFF": "The way is closed",
+        }
+        status = statuses.get(step_text)
+        if step_text.startswith("SYNC OFFLINE ("):
+            status = "Bearing memories"
+        if status is None:
+            # Setup actions and failures must remain explicit and readable.
+            self._chronicle_active = False
+            self.display_on()
+            Lcd.clear(0x000000)
+            Lcd.setFont(M5.Lcd.FONTS.DejaVu12)
+            Lcd.setTextColor(0xFFFFFF, 0x000000)
+            for index in range(0, len(step_text), 17):
+                Lcd.setCursor(3, 65 + (index // 17) * 20)
+                Lcd.print(step_text[index:index + 17])
+            return
+
+        if not self._chronicle_active:
+            self._chronicle_index = (self._chronicle_index + 1) % len(CHRONICLES)
+            self._chronicle_active = True
+            self._chronicle_started_ms = time.ticks_ms()
+        reference, verse = CHRONICLES[self._chronicle_index]
         self.display_on()
         Lcd.clear(0x000000)
-        Lcd.setFont(M5.Lcd.FONTS.DejaVu18)
-        Lcd.setTextColor(0x00AAFF, 0x000000)
-        Lcd.setCursor(10, 20)
-        Lcd.print("SYNCING...")
         Lcd.setFont(M5.Lcd.FONTS.DejaVu12)
-        Lcd.setTextColor(0xFFFFFF, 0x000000)
-        Lcd.setCursor(10, 60)
-        Lcd.print(step_text)
+        gold, ivory = 0xB89A60, 0xDDD3BC
+        for line, y in (("CHRONICLES", 9), ("OF TAMARIX", 26)):
+            Lcd.setTextColor(gold, 0x000000)
+            Lcd.setCursor(24, y)
+            Lcd.print(line)
+        draw_chronicle_divider(46)
+        draw_tamarix(67, 52)
+        Lcd.setTextColor(ivory, 0x000000)
+        for index, line in enumerate(verse):
+            Lcd.setCursor(5, 84 + index * 14)
+            Lcd.print(line)
+        Lcd.setTextColor(gold, 0x000000)
+        Lcd.setCursor(5, 193)
+        Lcd.print("Book " + reference)
+        draw_chronicle_divider(213)
+        Lcd.setTextColor(0x999080, 0x000000)
+        Lcd.setCursor(3, 220)
+        Lcd.print(status)
+        if step_text == "WIFI: OFF":
+            # Radios are already off. Count network time towards reading time.
+            words = sum(len(line.split()) for line in verse)
+            reading_ms = min(14000, max(8000, 1500 + words * 500))
+            elapsed = time.ticks_diff(time.ticks_ms(), self._chronicle_started_ms)
+            remaining = max(0, reading_ms - elapsed)
+            if remaining:
+                time.sleep_ms(remaining)
+            self._chronicle_active = False
 
     def render_contract_review(self, selected_seed_idx):
         Lcd.clear(0x000000)
@@ -191,38 +274,27 @@ class UiRenderer:
         Lcd.setFont(M5.Lcd.FONTS.DejaVu12)
         Lcd.setTextColor(0xFFA500, 0x000000)
         Lcd.setCursor(10, 12)
-        Lcd.print("INTENT PACT")
+        Lcd.print("THE PACT")
         Lcd.drawLine(8, 28, 127, 28, 0x553311)
 
-        Lcd.setTextColor(0x888888, 0x000000)
-        Lcd.setCursor(8, 38)
-        Lcd.print("Seed of:")
+        draw_tamarix(67, 34, scale=2)
         Lcd.setTextColor(seed["accent_color"], 0x000000)
-        Lcd.setCursor(8, 54)
+        Lcd.setCursor(8, 101)
         Lcd.print(seed["name"])
-
-        Lcd.setTextColor(0x888888, 0x000000)
-        Lcd.setCursor(8, 76)
-        Lcd.print("Pact Target:")
         Lcd.setTextColor(0xFFFFFF, 0x000000)
-        Lcd.setCursor(8, 92)
+        Lcd.setCursor(8, 121)
         mins = seed["target_sec"] // 60
-        Lcd.print(f"{mins} Minutes" if mins > 0 else f"{seed['target_sec']}s")
-
+        Lcd.print(f"{mins} min of care" if mins > 0 else f"{seed['target_sec']}s of care")
         Lcd.setTextColor(0x888888, 0x000000)
-        Lcd.setCursor(8, 114)
-        Lcd.print("Possible Yield:")
+        Lcd.setCursor(8, 143)
+        Lcd.print("A hidden bloom")
+        draw_chronicle_divider(168)
         Lcd.setTextColor(0x00FF88, 0x000000)
-        Lcd.setCursor(8, 130)
-        Lcd.print("? Mystery Plant")
-
-        Lcd.drawLine(8, 154, 127, 154, 0x444444)
-        Lcd.setTextColor(0x00AAFF, 0x000000)
-        Lcd.setCursor(6, 170)
-        Lcd.print("[A] PLANT & LOCK")
+        Lcd.setCursor(6, 184)
+        Lcd.print("[A] Take the vow")
         Lcd.setTextColor(0x777777, 0x000000)
-        Lcd.setCursor(6, 198)
-        Lcd.print("[B] BACK")
+        Lcd.setCursor(6, 212)
+        Lcd.print("[B] Return")
 
     def render(self, state, seed_idx, user_name, total_points, score, focus_seconds):
         if not self.is_display_on:
@@ -246,28 +318,28 @@ class UiRenderer:
             Lcd.setFont(M5.Lcd.FONTS.DejaVu18)
             Lcd.setTextColor(0x00FF88, 0x000000)
             Lcd.setCursor(8, 20)
-            Lcd.print("GREENHOUSE")
+            Lcd.print("THY GARDEN")
 
             Lcd.setFont(M5.Lcd.FONTS.DejaVu12)
             Lcd.setTextColor(0x00AAFF, 0x000000)
             Lcd.setCursor(8, 48)
             user_disp = user_name[:9]
-            Lcd.print(f"Farm: {user_disp}")
+            Lcd.print(f"Name: {user_disp}")
             Lcd.setCursor(8, 66)
             Lcd.print(f"Total: {total_points} XP")
 
             Lcd.setTextColor(0x888888, 0x000000)
             Lcd.setCursor(8, 95)
-            Lcd.print("Intent Selected:")
+            Lcd.print("Thy chosen seed:")
             Lcd.setTextColor(seed["accent_color"], 0x000000)
             Lcd.setCursor(8, 112)
             Lcd.print(f"> {seed['name']} <")
 
             Lcd.setTextColor(0xAAAAAA, 0x000000)
             Lcd.setCursor(8, 142)
-            Lcd.print("[BTN B] Change")
+            Lcd.print("[B] Choose seed")
             Lcd.setCursor(8, 162)
-            Lcd.print("[BTN A] Pact")
+            Lcd.print("[A] Make a pact")
 
             Lcd.setTextColor(0x666666, 0x000000)
             Lcd.setCursor(8, 195)
@@ -294,14 +366,14 @@ class UiRenderer:
                 Lcd.fillRect(bar_x, bar_y, fill_w, bar_h, seed["accent_color"])
 
             Lcd.setFont(M5.Lcd.FONTS.DejaVu12)
-            Lcd.setTextColor(seed["accent_color"], 0x000000)
-            Lcd.setCursor(14, 148)
-            Lcd.print(f"Seed: {seed['name'][:9]}")
-
-            Lcd.setTextColor(0xFFA500, 0x000000)
-            Lcd.setCursor(16, 172)
-            Lcd.print("PHONE LOCKED")
-
-            Lcd.setTextColor(0x555555, 0x000000)
-            Lcd.setCursor(20, 196)
-            Lcd.print("DO NOT TOUCH")
+            lines = (
+                ("[ PACT SEALED ]", 0xFFA500),
+                ("Tamarix keeps", 0xFFFFFF),
+                ("thy seed.", 0xFFFFFF),
+                ("Disturb not", 0x888888),
+                ("its rest.", 0x888888),
+            )
+            for index, (line, color) in enumerate(lines):
+                Lcd.setTextColor(color, 0x000000)
+                Lcd.setCursor(3, 145 + index * 18)
+                Lcd.print(line)

@@ -48,6 +48,6 @@ class HarvestTimingTests(unittest.TestCase):
         ui.show_harvest_timing({'wifi': 9000, 'total': 15000}, False)
         lcd.print.assert_any_call('Wi-Fi: 9.00s')
         lcd.print.assert_any_call('GET: --')
-        lcd.print.assert_any_call('Totale: 15.00s')
-        lcd.print.assert_any_call('Sync fallito')
+        lcd.print.assert_any_call('Total: 15.00s')
+        lcd.print.assert_any_call('Sync failed')
         self.assertTrue(ui.is_display_on)
