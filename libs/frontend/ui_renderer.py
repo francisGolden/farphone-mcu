@@ -10,6 +10,7 @@ from libs.frontend.pixel_art_engine import (
     draw_withered_crop,
     draw_revealed_plant,
     draw_tamarix,
+    draw_chronicle_emblem,
     draw_chronicle_divider,
     draw_recession_frame
 )
@@ -27,6 +28,7 @@ class UiRenderer:
         self._chronicle_started_ms = None
         self._chronicle_index = -1
         self._chronicle_active = False
+        self._chronicle_status = None
 
     def display_on(self):
         if self.power_manager:
@@ -48,6 +50,7 @@ class UiRenderer:
             self.render_wifi_setup(*self._wifi_setup_data)
 
     def render_wifi_setup(self, ssid, password, address, status):
+        self._chronicle_active = False
         if self._wifi_setup_data is None or self._wifi_setup_data[:3] != (ssid, password, address):
             self._wifi_setup_page = 0
         self._wifi_setup_data = (ssid, password, address, status)
@@ -97,6 +100,7 @@ class UiRenderer:
 
     def show_harvest_timing(self, timings, synced):
         """Diagnostic screen: sync has finished and radios have been shut down."""
+        self._chronicle_active = False
         self.display_on()
         M5.update()
         Lcd.clear(0x000000)
@@ -125,6 +129,7 @@ class UiRenderer:
 
     def show_sync_error(self, details):
         """Retain safe diagnostics on-device without relying on USB logging."""
+        self._chronicle_active = False
         self.display_on()
         M5.update()
         Lcd.clear(0x000000)
@@ -154,6 +159,7 @@ class UiRenderer:
             time.sleep_ms(40)
 
     def trigger_breach_alert(self, held_seconds=0):
+        self._chronicle_active = False
         self.display_on()
 
         def tone(frequency, duration):
@@ -231,32 +237,40 @@ class UiRenderer:
                 Lcd.print(step_text[index:index + 17])
             return
 
-        if not self._chronicle_active:
+        new_chronicle = not self._chronicle_active
+        if new_chronicle:
+            self._chronicle_status = None
             self._chronicle_index = (self._chronicle_index + 1) % len(CHRONICLES)
             self._chronicle_active = True
             self._chronicle_started_ms = time.ticks_ms()
         reference, verse = CHRONICLES[self._chronicle_index]
         self.display_on()
-        Lcd.clear(0x000000)
-        Lcd.setFont(M5.Lcd.FONTS.DejaVu12)
-        gold, ivory = 0xB89A60, 0xDDD3BC
-        for line, y in (("CHRONICLES", 9), ("OF TAMARIX", 26)):
+        if new_chronicle:
+            Lcd.clear(0x000000)
+            Lcd.setFont(M5.Lcd.FONTS.DejaVu12)
+            gold, ivory = 0xB89A60, 0xDDD3BC
+            for line, y in (("CHRONICLES", 9), ("OF TAMARIX", 26)):
+                Lcd.setTextColor(gold, 0x000000)
+                Lcd.setCursor(24, y)
+                Lcd.print(line)
+            draw_chronicle_divider(46)
+            draw_chronicle_emblem(67, 51)
+            Lcd.setTextColor(ivory, 0x000000)
+            for index, line in enumerate(verse):
+                Lcd.setCursor(5, 84 + index * 14)
+                Lcd.print(line)
             Lcd.setTextColor(gold, 0x000000)
-            Lcd.setCursor(24, y)
-            Lcd.print(line)
-        draw_chronicle_divider(46)
-        draw_tamarix(67, 52)
-        Lcd.setTextColor(ivory, 0x000000)
-        for index, line in enumerate(verse):
-            Lcd.setCursor(5, 84 + index * 14)
-            Lcd.print(line)
-        Lcd.setTextColor(gold, 0x000000)
-        Lcd.setCursor(5, 193)
-        Lcd.print("Book " + reference)
-        draw_chronicle_divider(213)
-        Lcd.setTextColor(0x999080, 0x000000)
-        Lcd.setCursor(3, 220)
-        Lcd.print(status)
+            Lcd.setCursor(5, 193)
+            Lcd.print("Book " + reference)
+            draw_chronicle_divider(213)
+        if status != self._chronicle_status:
+            # Erase only the footer, including remnants of a longer message.
+            Lcd.fillRect(0, 219, 135, 21, 0x000000)
+            Lcd.setFont(M5.Lcd.FONTS.DejaVu12)
+            Lcd.setTextColor(0x999080, 0x000000)
+            Lcd.setCursor(3, 220)
+            Lcd.print(status)
+            self._chronicle_status = status
         if step_text == "WIFI: OFF":
             # Radios are already off. Count network time towards reading time.
             words = sum(len(line.split()) for line in verse)
@@ -268,6 +282,7 @@ class UiRenderer:
             self._chronicle_active = False
 
     def render_contract_review(self, selected_seed_idx):
+        self._chronicle_active = False
         Lcd.clear(0x000000)
         seed = SEEDS_CATALOG[selected_seed_idx]
 
@@ -300,6 +315,7 @@ class UiRenderer:
         if not self.is_display_on:
             return
 
+        self._chronicle_active = False
         if state == STATE_REVIEW:
             self.render_contract_review(seed_idx)
             return

@@ -189,8 +189,7 @@ if configure_wifi:
     # Consume setup button edges before the normal app loop starts.
     M5.update()
 
-render_current_ui()
-
+# Keep the boot Chronicle visible until initial synchronization finishes.
 try:
     local_pending = get_pending_syncs()
 except (OSError, ValueError):
