@@ -2,16 +2,41 @@
 
 **Put your phone aside. Give your life room to grow.**
 
+![Illustrated overview of Tamarix: Thy Garden, The Pact, and the growing seed during a sealed pact](docs/images/tamarix-screen-overview.jpg)
+
+*Thy Garden → The Pact → A seed entrusted to Tamarix. Illustrative device mockup.*
+
 Tamarix is a small physical companion for digital wellbeing, built for the **M5Stack StickS3**. Place your phone face down with the stick resting on its back, as far away from you as possible, choose an intention, and spend time on something you want to nurture. A completed session grows a plant and earns XP for your garden.
+
+It is also the name of the garden's guardian: **Tamarix, Guardian of the Plants
+and Minister of the Garden**. Each focus session is a pact with him, and each
+plant is the living record of a promise kept.
 
 The stick runs a MicroPython application on **UIFlow2**. This repository contains its firmware application, sounds, plant catalogue, and tests. The Spring Boot backend is a separate project.
 
 ## The pact with Tamarix
 
-Tamarix is the Lord of Plants, Keeper of Seeds, and Minister of the Garden.
+<p align="center">
+  <img src="docs/images/tamarix-guardian.jpg" width="420" alt="Tamarix, Guardian of the Plants and Minister of the Garden, holding a luminous sprout in his hands">
+</p>
+
+Tamarix bears the titles **Guardian of the Plants**, **Lord of Plants**,
+**Keeper of Seeds**, and **Minister of the Garden**. His beard is woven with
+roots and small flowers; his green mantle shelters a gardener's pockets, and
+his hands cradle a luminous sprout. His pixel-art portrait appears when thou
+makest thy pact and beside the verses of his Chronicles.
+
 Plant a seed and pledge thy word: he shall tend its growth while thou layest
 aside thy phone and givest thy time to thy chosen work. Break the pact, and
 the Minister withdraws his sap; the sprout returns to dust.
+
+The Guardian does not rage. The breaking of a pact brings **the Severing of
+the Bough**: he turns his gaze away and withdraws his grace. The sprout freezes,
+crumbles into ash, and leaves a single edict:
+
+> Thou hast sought the mire. The sap withdraws into the deep.
+
+Keep thy word, and the Keeper of Seeds grants thee the fruits of thy care.
 
 > Each sprout in thy garden bears witness to an hour reclaimed from noise
 > and entrusted to Tamarix, Lord of Plants.
@@ -55,6 +80,8 @@ The single-purpose stick runs the session locally, away from the phone's notific
 
 - Seven intentions, each with its own duration and plant collection.
 - Common, rare, and legendary harvests with different XP rewards.
+- Tamarix's pixel-art presence at the pact, and readable medieval-style verses
+  from the *Chronicles of Tamarix* during connection and synchronization.
 - Motion detection that registers a broken focus session when the stick is picked up or moved sufficiently before the timer ends.
 - Brief button peeks to check progress without ending the session.
 - Persistent offline storage and synchronization with the backend.
