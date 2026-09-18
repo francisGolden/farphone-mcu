@@ -1,4 +1,5 @@
 import time
+from libs.diagnostic_log import log as print
 import M5
 from M5 import Lcd
 from libs.constants import STATE_IDLE, STATE_REVIEW, STATE_FOCUS, STATE_INTERRUPTED
@@ -8,8 +9,9 @@ from libs.frontend.pixel_art_engine import (
     draw_mystery_sprout,
     draw_withered_crop,
     draw_revealed_plant,
-    draw_chronicle_emblem,
-    draw_chronicle_divider
+    draw_tamarix,
+    draw_chronicle_divider,
+    draw_recession_frame
 )
 from libs.utils.get_battery_percentage import get_battery_percentage
 
@@ -22,6 +24,7 @@ class UiRenderer:
         self._wifi_setup_data = None
         self._wifi_setup_page = 0
         self._wifi_qr_available = True
+        self._chronicle_started_ms = None
         self._chronicle_index = -1
         self._chronicle_active = False
 
@@ -152,30 +155,60 @@ class UiRenderer:
 
     def trigger_breach_alert(self, held_seconds=0):
         self.display_on()
+
+        def tone(frequency, duration):
+            try:
+                if M5.Speaker.tone(frequency, duration) is False:
+                    print("[Recisione] Tone rejected:", frequency)
+            except Exception as exc:
+                print("[Recisione] Tone failed:", exc)
+
+        try:
+            try:
+                M5.Speaker.begin()
+                M5.Speaker.stop()
+                M5.Speaker.setVolume(120)
+            except Exception as exc:
+                print("[Recisione] Audio initialization failed:", exc)
+            # Il Gelo: one still silhouette, no alarm or flashing.
+            draw_recession_frame(0)
+            tone(880, 500)
+            time.sleep_ms(650)
+            # La Recisione: a descending tritone and rising ash.
+            tone(622, 900)
+            for frame in range(1, 13):
+                draw_recession_frame(frame)
+                time.sleep_ms(100)
+            # One edict, without score, title, or reprimand.
+            Lcd.clear(0x101010)
+            Lcd.setFont(M5.Lcd.FONTS.DejaVu12)
+            Lcd.setTextColor(0xBBBBAF, 0x101010)
+            for index, line in enumerate(("Hai mirato", "al fango.",
+                                          "La linfa si ritrae", "nel profondo.")):
+                Lcd.setCursor(5, 85 + index * 20)
+                Lcd.print(line)
+            time.sleep_ms(3200)
+            tone(311, 40)
+            time.sleep_ms(40)
+        finally:
+            try:
+                M5.Speaker.stop()
+            except Exception:
+                pass
+            try:
+                M5.Speaker.end()
+            except Exception:
+                pass
         Lcd.clear(0x000000)
-        draw_withered_crop(67, 65)
-
-        Lcd.setFont(M5.Lcd.FONTS.DejaVu12)
-        lines = (
-            ("[ PATTO INFRANTO ]", 0xFF2222),
-            ("Il Ministro", 0xFFFFFF),
-            ("del Giardino", 0xFFFFFF),
-            ("ha ritratto", 0xFFFFFF),
-            ("la sua linfa.", 0xFFFFFF),
-            ("La fronda", 0xAAAAAA),
-            ("è avvizzita.", 0xAAAAAA),
-        )
-        for index, (line, color) in enumerate(lines):
-            Lcd.setTextColor(color, 0x000000)
-            Lcd.setCursor(3, 114 + index * 17)
-            Lcd.print(line)
-
-        if self.play_wav:
-            self.play_wav("res/audio/whistle.wav")
-        time.sleep_ms(3500)
+        self.display_off()
+        time.sleep_ms(2000)
 
     def render_sync_console(self, step_text):
+        # Teardown after an error must not hide it behind a fresh verse.
+        if step_text == "WIFI: OFF" and not self._chronicle_active:
+            return
         statuses = {
+            "[B] Configura Wi-Fi": "[B] Configura Wi-Fi",
             "WIFI: CONNECTING...": "Cerco la via...",
             "WIFI OK": "La via è aperta.",
             "SYNC HARVEST...": "Affido il raccolto",
@@ -201,6 +234,7 @@ class UiRenderer:
         if not self._chronicle_active:
             self._chronicle_index = (self._chronicle_index + 1) % len(CHRONICLES)
             self._chronicle_active = True
+            self._chronicle_started_ms = time.ticks_ms()
         reference, verse = CHRONICLES[self._chronicle_index]
         self.display_on()
         Lcd.clear(0x000000)
@@ -211,7 +245,7 @@ class UiRenderer:
             Lcd.setCursor(24, y)
             Lcd.print(line)
         draw_chronicle_divider(46)
-        draw_chronicle_emblem(67, 51)
+        draw_tamarix(67, 52)
         Lcd.setTextColor(ivory, 0x000000)
         for index, line in enumerate(verse):
             Lcd.setCursor(5, 84 + index * 14)
@@ -224,6 +258,13 @@ class UiRenderer:
         Lcd.setCursor(3, 220)
         Lcd.print(status)
         if step_text == "WIFI: OFF":
+            # Radios are already off. Count network time towards reading time.
+            words = sum(len(line.split()) for line in verse)
+            reading_ms = min(14000, max(8000, 1500 + words * 500))
+            elapsed = time.ticks_diff(time.ticks_ms(), self._chronicle_started_ms)
+            remaining = max(0, reading_ms - elapsed)
+            if remaining:
+                time.sleep_ms(remaining)
             self._chronicle_active = False
 
     def render_contract_review(self, selected_seed_idx):
@@ -233,38 +274,27 @@ class UiRenderer:
         Lcd.setFont(M5.Lcd.FONTS.DejaVu12)
         Lcd.setTextColor(0xFFA500, 0x000000)
         Lcd.setCursor(10, 12)
-        Lcd.print("INTENT PACT")
+        Lcd.print("IL PATTO")
         Lcd.drawLine(8, 28, 127, 28, 0x553311)
 
-        Lcd.setTextColor(0x888888, 0x000000)
-        Lcd.setCursor(8, 38)
-        Lcd.print("Seed of:")
+        draw_tamarix(67, 34, scale=2)
         Lcd.setTextColor(seed["accent_color"], 0x000000)
-        Lcd.setCursor(8, 54)
+        Lcd.setCursor(8, 101)
         Lcd.print(seed["name"])
-
-        Lcd.setTextColor(0x888888, 0x000000)
-        Lcd.setCursor(8, 76)
-        Lcd.print("Pact Target:")
         Lcd.setTextColor(0xFFFFFF, 0x000000)
-        Lcd.setCursor(8, 92)
+        Lcd.setCursor(8, 121)
         mins = seed["target_sec"] // 60
-        Lcd.print(f"{mins} Minutes" if mins > 0 else f"{seed['target_sec']}s")
-
+        Lcd.print(f"{mins} min di cura" if mins > 0 else f"{seed['target_sec']}s di cura")
         Lcd.setTextColor(0x888888, 0x000000)
-        Lcd.setCursor(8, 114)
-        Lcd.print("Possible Yield:")
+        Lcd.setCursor(8, 143)
+        Lcd.print("Pianta ignota")
+        draw_chronicle_divider(168)
         Lcd.setTextColor(0x00FF88, 0x000000)
-        Lcd.setCursor(8, 130)
-        Lcd.print("? Mystery Plant")
-
-        Lcd.drawLine(8, 154, 127, 154, 0x444444)
-        Lcd.setTextColor(0x00AAFF, 0x000000)
-        Lcd.setCursor(6, 170)
-        Lcd.print("[A] PLANT & LOCK")
+        Lcd.setCursor(6, 184)
+        Lcd.print("[A] Stringi il patto")
         Lcd.setTextColor(0x777777, 0x000000)
-        Lcd.setCursor(6, 198)
-        Lcd.print("[B] BACK")
+        Lcd.setCursor(6, 212)
+        Lcd.print("[B] Indietro")
 
     def render(self, state, seed_idx, user_name, total_points, score, focus_seconds):
         if not self.is_display_on:

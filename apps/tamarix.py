@@ -332,6 +332,8 @@ while True:
             continue
         last_sensor_ok_ms = now
         if detector.update(acc_sample):
+            stop_battery_tone()
+            battery_notice_until = None
             session.interrupt_session(app_state)
             last_activity_ms = session.last_activity_ms
             continue

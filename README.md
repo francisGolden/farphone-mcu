@@ -28,8 +28,10 @@ concreta di ogni patto dipende dal seme scelto.
 During Wi-Fi connection and data synchronization, the stick displays the
 *Cronache di Tamarix*: original verses in archaizing Italian, framed by a pixel-art
 open codex with a green sprout and tiled earth-toned borders on black. One verse stays visible throughout each synchronization;
-the next operation advances to another verse. No artificial loading delay is
-added. Setup instructions and errors remain explicit. Middle English is planned
+the next operation advances to another verse. Each verse stays visible for 8–14 seconds, based on its word count. Network
+time counts towards this minimum; any remaining reading time is added after
+the radio is off. The boot verse continues into synchronization. Errors are
+shown immediately. Setup instructions and errors remain explicit. Middle English is planned
 for a later localization; the current verses are original lore, not quotations
 from Dante or The Elder Scrolls.
 
@@ -263,3 +265,16 @@ undetected because the accelerometer does not measure contact with the phone.
 | Storage error | Back up `pending_sync.json` before investigating. Do not clear it to hide the error. |
 
 Further details: [Wi-Fi setup](docs/wifi-setup.md) · [Firmware reliability and device checks](docs/firmware-reliability.md).
+
+
+### La Recisione del Ramo
+
+A broken pact is presented as a solemn withdrawal: an ash-grey sprout freezes,
+fractures into rising pixel dust, then gives way to a single edict:
+«Hai mirato al fango. La linfa si ritrae nel profondo.»
+The former whistle is replaced by quiet descending tones (880 Hz for 500 ms,
+622 Hz for 900 ms, then a 311 Hz pulse for 40 ms, speaker volume 120).
+Audio shuts down before two seconds of display blackout. The outcome is saved
+locally before the rite; network synchronization follows the rite and then the
+stick returns to idle. Verify volume and legibility on
+actual hardware.

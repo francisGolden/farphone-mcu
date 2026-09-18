@@ -219,6 +219,15 @@ class SessionPersistenceTests(unittest.TestCase):
         app = dict(selected_seed_idx=0, total_points=100, user_name='User', is_display_on=True)
         return session, app, order, sync
 
+    def test_breach_rite_precedes_network_sync(self):
+        session, app, order, sync = self.setup_session(sync_result=True)
+        session.session_start_ms = 0
+        session.trigger_breach_alert = lambda **kwargs: order.append('rite')
+        sync.side_effect = lambda *args, **kwargs: order.append('sync') or True
+        session.interrupt_session(app)
+        self.assertEqual(order, ['persist', 'rite', 'sync'])
+        self.assertEqual(session.current_state, 'IDLE')
+
     def test_harvest_persisted_before_animation_and_only_once(self):
         session, app, order, sync = self.setup_session()
         session.complete_session(app)

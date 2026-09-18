@@ -89,3 +89,46 @@ def draw_chronicle_divider(y):
     for x in (7, 123):
         Lcd.fillRect(x, y - 2, 5, 6, C_STEM_GREEN)
         Lcd.fillRect(x + 1, y - 4, 3, 2, C_LEAF_BRIGHT)
+
+
+def draw_recession_frame(frame):
+    """Freeze, fracture, then lift a monochrome sprout into dust (0..12)."""
+    Lcd.clear(0x101010)
+    sprite = (
+        "...###...###...",
+        "..#####.#####..",
+        "...#########...",
+        ".....#####.....",
+        ".......#.......",
+        ".......#.......",
+        "......###......",
+    )
+    for row, pixels in enumerate(sprite):
+        for col, pixel in enumerate(pixels):
+            if pixel != "#":
+                continue
+            seed = row * 17 + col * 7
+            if frame >= 2 and (row + col) % 5 == 0:
+                continue  # Dark fissures through the silhouette.
+            if frame >= 4:
+                age = frame - 4
+                if age > seed % 6 + 1:
+                    continue
+                x = 39 + col * 4 + ((seed % 3) - 1) * age
+                y = 88 + row * 4 - age * (2 + seed % 3)
+                shade = max(0x18, 0x78 - age * 12)
+                Lcd.fillRect(x, y, 2, 2, shade * 0x010101)
+            else:
+                Lcd.fillRect(39 + col * 4, 88 + row * 4, 4, 4, 0x888880)
+    Lcd.fillRect(43, 120, 48, 4, 0x343430)
+    Lcd.fillRect(51, 124, 32, 4, 0x242420)
+
+
+def draw_tamarix(cx, top, scale=1):
+    from res.data.tamarix_sprite import PALETTE, SPRITE
+    left = cx - 12 * scale
+    for row, pixels in enumerate(SPRITE):
+        for col, pixel in enumerate(pixels):
+            if pixel != ".":
+                Lcd.fillRect(left + col * scale, top + row * scale,
+                             scale, scale, PALETTE[pixel])
