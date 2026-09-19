@@ -3,6 +3,7 @@ import math
 import time
 import random
 import config
+from libs.audio_output import quiet_shutdown, play_buffered_wav, begin_output
 import M5
 from M5 import BtnA, BtnB, Imu, Lcd, Speaker
 from libs.network.network_client import initial_sync
@@ -25,9 +26,9 @@ M5.begin()
 cpu_power = CpuPowerManager(
     light_sleep_enabled=getattr(config, "LIGHT_SLEEP_ENABLED", True)
 )
-# M5 initialization may start the audio peripheral before the first sound.
+# M5 initialization may start audio; use the same quiet-stop policy at boot.
 try:
-    Speaker.end()
+    quiet_shutdown(Speaker)
 except Exception as exc:
     print("[Power] Speaker shutdown failed:", exc)
 Lcd.setBrightness(80)
@@ -38,22 +39,9 @@ harvest_led = HarvestLed()
 def play_wav(path, volume=240):
     try:
         stop_battery_tone()
-        Speaker.begin()
-        Speaker.setVolume(volume)
-        Speaker.playWavFile(path)
-        while Speaker.isPlaying():
-            time.sleep_ms(20)
-        Speaker.setVolume(0)
-        time.sleep_ms(40)
-        Speaker.stop()
-        time.sleep_ms(20)
+        play_buffered_wav(Speaker, path, volume)
     except Exception as e:
         print(f"[Audio] Error {path}:", e)
-    finally:
-        try:
-            Speaker.end()
-        except Exception as exc:
-            print("[Audio] Speaker shutdown failed:", exc)
 
 def read_accel():
     try:
@@ -131,10 +119,7 @@ def stop_battery_tone():
     global battery_tone_until
     if battery_tone_until is not None:
         battery_tone_until = None
-        try:
-            Speaker.stop()
-        finally:
-            Speaker.end()
+        quiet_shutdown(Speaker)
 
 
 def render_current_ui():
@@ -250,7 +235,7 @@ while True:
         # Tone playback is asynchronous: motion detection continues every 40 ms.
         battery_tone_until = time.ticks_add(now, 180)
         try:
-            Speaker.begin()
+            begin_output(Speaker)
             Speaker.setVolume(80)
             Speaker.tone(1800, 120)
         except Exception as exc:
