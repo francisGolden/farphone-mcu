@@ -59,7 +59,9 @@ class ChroniclesTests(unittest.TestCase):
             lcd, speaker, clock, draw = Mock(), Mock(), Mock(), Mock()
             speaker.tone.side_effect = failure
             ns = {'Lcd': lcd, 'M5': types.SimpleNamespace(Lcd=lcd, Speaker=speaker),
-                  'time': clock, 'draw_recession_frame': draw}
+                  'time': clock, 'draw_recession_frame': draw,
+                  'begin_output': lambda sp: sp.begin(),
+                  'quiet_shutdown': lambda sp: (sp.setVolume(0), sp.stop(), sp.end())}
             exec(compile(ast.Module(body=[cls], type_ignores=[]), 'ui', 'exec'), ns)
             ui = ns['UiRenderer']()
             ui.trigger_breach_alert()

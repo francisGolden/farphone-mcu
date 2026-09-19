@@ -56,7 +56,6 @@ res/
     harvest.wav
     reward.wav
     seeds.wav
-    whistle.wav
   data/
     seeds_catalog.py
     chronicles.py
@@ -211,9 +210,20 @@ Further details: [Wi-Fi setup](wifi-setup.md) · [Firmware reliability and devic
 A broken pact is presented as a solemn withdrawal: an ash-grey sprout freezes,
 fractures into rising pixel dust, then gives way to a single edict:
 “Thou hast sought the mire. The sap withdraws into the deep.”
-The former whistle is replaced by quiet descending tones (880 Hz for 500 ms,
+The rite uses quiet descending tones (880 Hz for 500 ms,
 622 Hz for 900 ms, then a 311 Hz pulse for 40 ms, speaker volume 120).
 Audio shuts down before two seconds of display blackout. The outcome is saved
 locally before the rite; network synchronization follows the rite and then the
 stick returns to idle. Verify volume and legibility on
 actual hardware.
+
+
+### StickS3 speaker shutdown noise
+
+Device testing isolated a click at `Speaker.end()`, including muted playback.
+Keeping the speaker enabled caused unacceptable battery drain and is no longer
+used; any old `SPEAKER_KEEP_ENABLED` setting is ignored. Audio now applies the
+ES8311 hardware DAC mute before stopping output and powering down, then clears
+mute on the next playback. This targets the shutdown transient but still needs
+on-device validation. WAV playback is retained and timed light sleep follows
+`LIGHT_SLEEP_ENABLED` again. Codec access failure does not prevent power-off.

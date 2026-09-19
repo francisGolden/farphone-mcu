@@ -1,4 +1,5 @@
 import time
+from libs.audio_output import quiet_shutdown, begin_output
 from libs.diagnostic_log import log as print
 import M5
 from M5 import Lcd
@@ -171,7 +172,7 @@ class UiRenderer:
 
         try:
             try:
-                M5.Speaker.begin()
+                begin_output(M5.Speaker)
                 M5.Speaker.stop()
                 M5.Speaker.setVolume(120)
             except Exception as exc:
@@ -198,13 +199,9 @@ class UiRenderer:
             time.sleep_ms(40)
         finally:
             try:
-                M5.Speaker.stop()
-            except Exception:
-                pass
-            try:
-                M5.Speaker.end()
-            except Exception:
-                pass
+                quiet_shutdown(M5.Speaker)
+            except Exception as exc:
+                print("[Recisione] Audio shutdown failed:", exc)
         Lcd.clear(0x000000)
         self.display_off()
         time.sleep_ms(2000)
