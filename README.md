@@ -6,7 +6,7 @@ Tamarix is a physical companion that helps you leave your phone behind and give
 undivided attention to something you choose. Plant a seed, keep your promise,
 and return to a garden grown from time well spent.
 
-![Illustrated overview of Tamarix: the garden, the pact, and a growing seed](docs/images/tamarix-screen-overview.jpg)
+![Illustrated overview of Tamarix: the garden, the pact, and a growing seed](docs/images/tamarix-screen-overview.webp)
 
 *Your garden → The pact → A seed entrusted to Tamarix. Illustrative device mockup.*
 
@@ -53,7 +53,7 @@ its apps. Very slow, level movements can still escape detection.
 ## The pact with Tamarix
 
 <p align="center">
-  <img src="docs/images/tamarix-guardian.jpg" width="420" alt="Tamarix, Guardian of the Plants and Minister of the Garden, holding a luminous sprout">
+  <img src="docs/images/tamarix-guardian.webp" width="420" alt="Tamarix, Guardian of the Plants and Minister of the Garden, holding a luminous sprout">
 </p>
 
 **Tamarix, Guardian of the Plants and Minister of the Garden**, is also known
